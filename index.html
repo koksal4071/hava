@@ -146,6 +146,11 @@ footer a{color:inherit}
 .gozlem .ham{font-family:ui-monospace,Consolas,monospace;font-size:12px;color:var(--soluk);margin-top:8px;word-break:break-all}
 .gozlem .ist{cursor:pointer}.gozlem .ist.aktif{background:var(--gok);border-color:var(--gok);color:#fff}
 .gozlem .eski{color:var(--turuncu);font-weight:600}
+.mgmkart{display:flex;gap:16px;align-items:center;flex-wrap:wrap}
+.mgmkart .gorsel{background:#fff;border-radius:10px;padding:6px;line-height:0;border:1px solid var(--cizgi)}
+.mgmkart .gorsel img{display:block}
+.mgmkart .yazi{flex:1;min-width:200px;font-size:14px;color:var(--soluk)}.mgmkart .yazi b{color:var(--ink)}
+.mgmtahmin{margin-top:12px;overflow-x:auto}.mgmtahmin .gorsel{display:inline-block}
 </style>
 </head>
 <body>
@@ -168,7 +173,8 @@ footer a{color:inherit}
 <main>
   <div class="uyarilar" id="uyarilar"></div>
 
-  <h2>Gerçek gözlem <small>en yakın havalimanı istasyonu · METAR</small></h2>
+  <h2>Gerçek gözlem <small>MGM resmî ölçüm + en yakın havalimanı (METAR)</small></h2>
+  <div class="kart" id="mgm"><div class="durumyok">MGM verisi yükleniyor…</div></div>
   <div class="kart gozlem" id="gozlem"><div class="durumyok">Gözlem yükleniyor…</div></div>
 
   <h2>Yağış beklentisi <small>önümüzdeki saatler</small></h2>
@@ -218,7 +224,7 @@ footer a{color:inherit}
 </main>
 <footer>
   Veri: <a href="https://open-meteo.com/" rel="noopener">Open-Meteo</a> (ECMWF, DWD ICON, NOAA GFS vb. modellerin en uygun birleşimi). Sayfa her açılışta ve açık kaldıkça 10 dakikada bir güncellenir.
-  Radar: <a href="https://www.rainviewer.com/" rel="noopener">Weather data by RainViewer</a> (kişisel kullanım). Harita: © OpenStreetMap katkıcıları. Gözlem: NOAA Aviation Weather Center (havalimanı METAR raporları).
+  Radar: <a href="https://www.rainviewer.com/" rel="noopener">Weather data by RainViewer</a> (kişisel kullanım). Harita: © OpenStreetMap katkıcıları. Gözlem: <a href="https://www.mgm.gov.tr/" rel="noopener">Meteoroloji Genel Müdürlüğü</a> resmî site grafikleri ve NOAA Aviation Weather Center (havalimanı METAR raporları).
   Uyarılar model verisinden otomatik üretilir, resmî değildir; resmî uyarılar için <a href="https://www.mgm.gov.tr/" rel="noopener">Meteoroloji Genel Müdürlüğü</a>.
 </footer>
 
@@ -312,7 +318,7 @@ async function yukle(){
   $("zaman").textContent = "Güncelleniyor…";
   kveri = null; kisYenile(); dogYenile();
   radarKur();
-  gozlemYukle();
+  gozlemYukle(); mgmCiz();
   try { veriHam = await getir(); veri = veriHam; sonGuncelleme = Date.now(); duzeltUygula(); ciz(); gozlemCiz(); karsilastir();
         if(duzeltAktif && KARSILASTIR.includes(model)) dogHesapla(); }
   catch(e){ $("zaman").textContent = "Veri alınamadı (" + e.message + "). İnternet bağlantını kontrol edip yenile."; }
@@ -937,6 +943,40 @@ function favCiz(){
   const f = ls.get("hava_fav", []);
   $("favs").innerHTML = f.map((y,k) => `<button class="fav${y.ad===yer.ad?" aktif":""}" data-k="${k}">${esc(y.ad)}</button>`).join("");
   $("favs").querySelectorAll(".fav").forEach(b => b.onclick = () => { yer = f[+b.dataset.k]; ls.set("hava_yer", yer); yukle(); });
+}
+
+/* ---------- MGM resmî grafikleri (mgm.gov.tr/site/link-vermek-icin.aspx) ---------- */
+// MGM içeriği değiştirilmeden, olduğu gibi gösterilir. "m" parametresi: büyük harf, Türkçe karaktersiz.
+function mgmAd(a){
+  const t = (a||"").toLocaleUpperCase("tr-TR").replace(/Ç/g,"C").replace(/Ğ/g,"G").replace(/İ/g,"I").replace(/Ö/g,"O").replace(/Ş/g,"S").replace(/Ü/g,"U").trim();
+  return t === "KAHRAMANMARAS" ? "K.MARAS" : t;
+}
+function mgmAdaylar(){
+  const il = (yer.ek||"").split(",")[0].trim();
+  return [...new Set([yer.ad !== "Konumum" ? mgmAd(yer.ad) : "", mgmAd(il)].filter(Boolean))];
+}
+function mgmIl(){ return (yer.ek||"").split(",")[0].trim() || yer.ad; }
+function mgmCiz(){
+  const ad = mgmAdaylar(), dk = Math.floor(Date.now()/600000);
+  if(!ad.length){ $("mgm").innerHTML = '<div class="durumyok">MGM grafiği için şehir adıyla arama yap (konum ile seçilen yerde ad bilinmiyor).</div>'; return; }
+  const url = (tur, m) => tur === "son"
+    ? `https://www.mgm.gov.tr/sunum/sondurum-show-2.aspx?m=${encodeURIComponent(m)}&rC=dde5ee&rZ=fff&_=${dk}`
+    : `https://www.mgm.gov.tr/sunum/tahmin-show-2.aspx?m=${encodeURIComponent(m)}&basla=1&bitir=5&rC=dde5ee&rZ=fff&_=${dk}`;
+  const m0 = ad[0];
+  $("mgm").innerHTML = `
+    <div class="mgmkart">
+      <a class="gorsel" href="https://www.mgm.gov.tr/tahmin/il-ve-ilceler.aspx?il=${encodeURIComponent(mgmIl())}" target="_blank" rel="noopener" title="MGM'de aç">
+        <img id="mgmson" src="${url("son", m0)}" width="140" height="100" alt="MGM son durum: ${esc(m0)}"></a>
+      <div class="yazi"><b>MGM son durum</b> · ${esc(yer.ad !== "Konumum" ? yer.ad : mgmIl())}<br>Meteoroloji Genel Müdürlüğü'nün istasyon ölçümü. Bulut ve hava durumu için en güvenilir kaynak budur;
+        üstteki büyük değer model hesabıdır. Görsele basınca MGM sayfası açılır.</div>
+    </div>
+    <div class="mgmtahmin"><a class="gorsel" href="https://www.mgm.gov.tr/tahmin/il-ve-ilceler.aspx?il=${encodeURIComponent(mgmIl())}" target="_blank" rel="noopener">
+      <img id="mgmtah" src="${url("tah", m0)}" width="400" height="100" alt="MGM 5 günlük tahmin: ${esc(m0)}"></a></div>
+    <div style="font-size:13px;color:var(--soluk);margin-top:6px">Kaynak: <a href="https://www.mgm.gov.tr/" target="_blank" rel="noopener">Meteoroloji Genel Müdürlüğü</a> · 5 günlük resmî tahmin, kendi model tablonla karşılaştırmak için.</div>`;
+  // ilçe adı tanınmazsa il adıyla tekrar dene
+  ["mgmson","mgmtah"].forEach(id => { const im = $(id); let k = 0;
+    im.onerror = () => { k++; if(k < ad.length){ im.src = url(id === "mgmson" ? "son" : "tah", ad[k]); }
+      else im.closest(".gorsel").outerHTML = '<span class="durumyok">MGM grafiği yüklenemedi.</span>'; }; });
 }
 
 /* ---------- gerçek gözlem (METAR, gozlem.json) ---------- */
