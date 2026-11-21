@@ -134,6 +134,18 @@ footer a{color:inherit}
 .rbaglar{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
 .rbaglar a{font-size:13px;border:1px solid var(--cizgi);border-radius:999px;padding:5px 12px;color:var(--ink);text-decoration:none;background:var(--kart)}
 .rbaglar a:hover{border-color:var(--mavi)}
+.gozlem{margin-top:12px}
+.gozlem .bas{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;align-items:baseline}
+.gozlem .bas b{font-size:15px}.gozlem .bas span{color:var(--soluk);font-size:13px}
+.gozlem .ana{display:grid;grid-template-columns:auto minmax(0,1fr);gap:16px;align-items:center;margin-top:10px}
+.gozlem .gt{font-size:44px;font-weight:800;line-height:1}
+.gozlem .gd{font-size:18px;font-weight:700;line-height:1.25}.gozlem .gd small{display:block;font-size:14px;font-weight:500;color:var(--soluk)}
+.gozlem .kars{margin-top:10px;font-size:14px;padding:8px 12px;border-radius:10px;background:light-dark(#f3f6fa,#0f1a27)}
+.gozlem .kars.fark{background:light-dark(#fff4e0,#2a1f0c)}
+:root[data-theme=gece] .gozlem .kars{background:#111}:root[data-theme=gece] .gozlem .kars.fark{background:#1d1708}
+.gozlem .ham{font-family:ui-monospace,Consolas,monospace;font-size:12px;color:var(--soluk);margin-top:8px;word-break:break-all}
+.gozlem .ist{cursor:pointer}.gozlem .ist.aktif{background:var(--gok);border-color:var(--gok);color:#fff}
+.gozlem .eski{color:var(--turuncu);font-weight:600}
 </style>
 </head>
 <body>
@@ -155,6 +167,9 @@ footer a{color:inherit}
 
 <main>
   <div class="uyarilar" id="uyarilar"></div>
+
+  <h2>Gerçek gözlem <small>en yakın havalimanı istasyonu · METAR</small></h2>
+  <div class="kart gozlem" id="gozlem"><div class="durumyok">Gözlem yükleniyor…</div></div>
 
   <h2>Yağış beklentisi <small>önümüzdeki saatler</small></h2>
   <div class="yag" id="yag"></div>
@@ -203,7 +218,7 @@ footer a{color:inherit}
 </main>
 <footer>
   Veri: <a href="https://open-meteo.com/" rel="noopener">Open-Meteo</a> (ECMWF, DWD ICON, NOAA GFS vb. modellerin en uygun birleşimi). Sayfa her açılışta ve açık kaldıkça 10 dakikada bir güncellenir.
-  Radar: <a href="https://www.rainviewer.com/" rel="noopener">Weather data by RainViewer</a> (kişisel kullanım). Harita: © OpenStreetMap katkıcıları.
+  Radar: <a href="https://www.rainviewer.com/" rel="noopener">Weather data by RainViewer</a> (kişisel kullanım). Harita: © OpenStreetMap katkıcıları. Gözlem: NOAA Aviation Weather Center (havalimanı METAR raporları).
   Uyarılar model verisinden otomatik üretilir, resmî değildir; resmî uyarılar için <a href="https://www.mgm.gov.tr/" rel="noopener">Meteoroloji Genel Müdürlüğü</a>.
 </footer>
 
@@ -297,7 +312,8 @@ async function yukle(){
   $("zaman").textContent = "Güncelleniyor…";
   kveri = null; kisYenile(); dogYenile();
   radarKur();
-  try { veriHam = await getir(); veri = veriHam; sonGuncelleme = Date.now(); duzeltUygula(); ciz(); karsilastir();
+  gozlemYukle();
+  try { veriHam = await getir(); veri = veriHam; sonGuncelleme = Date.now(); duzeltUygula(); ciz(); gozlemCiz(); karsilastir();
         if(duzeltAktif && KARSILASTIR.includes(model)) dogHesapla(); }
   catch(e){ $("zaman").textContent = "Veri alınamadı (" + e.message + "). İnternet bağlantını kontrol edip yenile."; }
 }
@@ -365,7 +381,7 @@ function ciz(){
   const z = new Date(sonGuncelleme);
   $("mnot").textContent = (model==="auto" ? "Open-Meteo bölgeye göre en iyi modelleri birleştirir" : `Tahmin: ${d._modelId}${d._yedek?" (saatlik veri otomatik)":""} · anlık değerler: otomatik`) + duzeltNotu();
   $("tablo-baslik").innerHTML = `10 günlük tahmin <small>${esc(MODELLER[model].ad)}${d._duzeltme ? " · yerel düzeltmeli" : ""}</small>`;
-  $("zaman").innerHTML = `<span>Ölçüm zamanı (yerel): ${c.time.replace("T"," ")}</span><span>Sayfa güncellendi: ${z.toLocaleTimeString("tr-TR",{hour:"2-digit",minute:"2-digit"})}</span>`;
+  $("zaman").innerHTML = `<span>Model hesabı (ölçüm değil): ${c.time.slice(11,16)}</span><span>Sayfa güncellendi: ${z.toLocaleTimeString("tr-TR",{hour:"2-digit",minute:"2-digit"})}</span>`;
 
   $("uyarilar").innerHTML = u.map(([r,b,a]) => `<div class="uyari ${r}" role="alert"><i style="background:var(--${r})"></i><div><b>${esc(b)}</b><span>${esc(a)}</span></div></div>`).join("");
 
@@ -921,6 +937,93 @@ function favCiz(){
   const f = ls.get("hava_fav", []);
   $("favs").innerHTML = f.map((y,k) => `<button class="fav${y.ad===yer.ad?" aktif":""}" data-k="${k}">${esc(y.ad)}</button>`).join("");
   $("favs").querySelectorAll(".fav").forEach(b => b.onclick = () => { yer = f[+b.dataset.k]; ls.set("hava_yer", yer); yukle(); });
+}
+
+/* ---------- gerçek gözlem (METAR, gozlem.json) ---------- */
+const BULUT_AD = {FEW:"Az bulutlu", SCT:"Parçalı bulutlu", BKN:"Çok bulutlu", OVC:"Kapalı", VV:"Gökyüzü görünmüyor"};
+const BULUT_SIRA = {FEW:1, SCT:2, BKN:3, OVC:4, VV:5};
+const HAVA_AD = {RA:"yağmur", DZ:"çisenti", SN:"kar", SG:"kar taneleri", PL:"buz taneleri", GR:"dolu", GS:"küçük dolu", UP:"yağış",
+  BR:"pus", FG:"sis", HZ:"kuru pus", FU:"duman", DU:"toz", SA:"kum", SQ:"ani fırtına", FC:"hortum", SS:"kum fırtınası", DS:"toz fırtınası", VA:"volkanik kül", PO:"toz girdabı"};
+const HAVA_TANIM = {SH:"sağanak", TS:"gök gürültülü", FZ:"donan", BL:"savrulan", DR:"alçakta savrulan", MI:"sığ", BC:"yer yer", PR:"kısmi"};
+const istAd = a => (a||"").replace(/\s+Intl\b/i,"").replace(/\s+(Arpt|Airport|AB|Ab)$/," Havalimanı").trim();
+let gozlemVeri = null, gozlemSecili = null, gozlemYer = "";
+function havaCoz(k){
+  const m = k.match(/^(\+|-|VC)?(MI|PR|BC|DR|BL|SH|TS|FZ)?((?:DZ|RA|SN|SG|PL|GR|GS|UP|BR|FG|FU|VA|DU|SA|HZ|PO|SQ|FC|SS|DS)*)$/);
+  if(!m) return k;
+  const olay = (m[3].match(/../g) || []).map(x => HAVA_AD[x] || x);
+  let t = (m[2] ? HAVA_TANIM[m[2]] + " " : "") + (olay.length ? olay.join(" ve ") : (m[2] === "TS" ? "" : ""));
+  if(m[2] === "TS" && !olay.length) t = "gök gürültüsü";
+  if(m[1] === "-") t = "hafif " + t; else if(m[1] === "+") t = "kuvvetli " + t; else if(m[1] === "VC") t = t + " (civarda)";
+  return t.trim();
+}
+function gokyuzu(s){
+  if(s.bulut && s.bulut.length){
+    const en = s.bulut.reduce((a,b) => (BULUT_SIRA[b[0]]||0) > (BULUT_SIRA[a[0]]||0) ? b : a);
+    return {ad: BULUT_AD[en[0]] || en[0], seviye: BULUT_SIRA[en[0]] || 0};
+  }
+  if(s.cavok) return {ad:"Açık (CAVOK)", seviye:0};
+  if(s.acik) return {ad:"Önemli bulut yok", seviye:0};
+  return {ad:"Bulut bilgisi yok", seviye:null};
+}
+function nemHesap(t, td){ if(t==null || td==null) return null; const f = x => Math.exp(17.625*x/(243.04+x)); return Math.round(100*f(td)/f(t)); }
+function mesafe(a1,o1,a2,o2){ const r = Math.PI/180, x = Math.sin((a2-a1)*r/2)**2 + Math.cos(a1*r)*Math.cos(a2*r)*Math.sin((o2-o1)*r/2)**2; return 12742*Math.asin(Math.sqrt(x)); }
+async function gozlemYukle(){
+  try{
+    const r = await fetch("gozlem.json?t=" + Math.floor(Date.now()/60000), {cache:"no-store"});
+    if(!r.ok) throw new Error(r.status === 404 ? "yok" : "HTTP " + r.status);
+    gozlemVeri = await r.json();
+  }catch(e){
+    if(!gozlemVeri){
+      $("gozlem").innerHTML = `<div class="durumyok">${e.message === "yok"
+        ? "Gözlem verisi henüz oluşturulmadı. GitHub'da <b>Actions → Gözlem verisi (METAR) → Run workflow</b> ile bir kez çalıştır; sonra 30 dakikada bir kendiliğinden güncellenir."
+        : "Gözlem verisi alınamadı (" + esc(e.message) + ")."}</div>`;
+      return;
+    }
+  }
+  gozlemCiz();
+}
+function gozlemCiz(){
+  if(!gozlemVeri) return;
+  const yk = yer.lat + "," + yer.lon;
+  if(yk !== gozlemYer){ gozlemSecili = null; gozlemYer = yk; }
+  const now = Date.now()/1000;
+  const liste = gozlemVeri.istasyonlar.filter(s => now - s.zaman < 6*3600)
+    .map(s => ({...s, km: mesafe(yer.lat, yer.lon, s.lat, s.lon)})).sort((a,b) => a.km - b.km).slice(0,4);
+  if(!liste.length){ $("gozlem").innerHTML = '<div class="durumyok">Son 6 saatte yakında gözlem yayınlayan istasyon yok.</div>'; return; }
+  const s = liste.find(x => x.id === gozlemSecili) || liste[0];
+  const dk = Math.round((now - s.zaman)/60), saat = new Date(s.zaman*1000).toLocaleTimeString("tr-TR",{hour:"2-digit",minute:"2-digit"});
+  const gk = gokyuzu(s), olay = (s.hava||[]).map(havaCoz).filter(Boolean);
+  const nem = nemHesap(s.t, s.td);
+  const ruz = s.hiz==null ? "–" : (s.hiz===0 ? "Sakin" : `${s.yon==="VRB" ? "Değişken" : (s.yon!=null ? YON[Math.round(s.yon/45)%8] : "")} ${s.hiz} km/sa${s.hamle ? " · hamle " + s.hamle : ""}`);
+  const gorus = s.gorus==null ? "–" : (s.gorus >= 9999 ? "10 km ve üzeri" : s.gorus >= 1000 ? yuv(s.gorus/1000, s.gorus < 5000 ? 1 : 0) + " km" : s.gorus + " m");
+  const tabanlar = (s.bulut||[]).filter(b => b[1]!=null).map(b => `${BULUT_AD[b[0]]||b[0]} ${Math.round(b[1]*0.3048/50)*50} m${b[2]==="CB" ? " (oraj bulutu)" : b[2]==="TCU" ? " (kabaran kümülüs)" : ""}`);
+  // model ile karşılaştır (anlık değerler her zaman "otomatik" modelden)
+  let kars = "";
+  if(veri && veri.current){
+    const c = veri.current, mk = c.cloud_cover;
+    const mSev = mk==null ? null : mk < 15 ? 0 : mk < 40 ? 1 : mk < 65 ? 2 : mk < 90 ? 3 : 4;
+    const bulutFark = gk.seviye!=null && mSev!=null && Math.abs(Math.min(gk.seviye,4) - mSev) >= 2;
+    const mYag = (c.precipitation||0) > 0 || c.weather_code >= 51, oYag = olay.some(o => /yağmur|çisenti|kar|dolu|yağış|buz/.test(o));
+    const yagFark = mYag !== oYag;
+    const fark = bulutFark || yagFark;
+    kars = `<div class="kars${fark ? " fark" : ""}"><b>${fark ? "Model ile gözlem uyuşmuyor" : "Model ile gözlem uyumlu"}:</b>
+      model şu an için <b>${esc(KOD[c.weather_code]||"–")}</b> (bulut %${yuv(mk)}, ${yuv(c.temperature_2m)}°) diyor; istasyonda <b>${esc(gk.ad.toLowerCase())}${oYag ? ", " + esc(olay.join(", ")) : ""}</b>${s.t!=null ? ", " + yuv(s.t) + "°" : ""}.
+      ${fark ? "Önümüzdeki 1–3 saat için gözleme ve radara daha çok güven." : ""}
+      ${s.km > 40 ? `<br><small>İstasyon ${Math.round(s.km)} km uzakta${s.yuk!=null ? " ve " + Math.round(s.yuk) + " m rakımda" : ""}; sıcaklık farkının bir kısmı bundan olabilir.</small>` : ""}</div>`;
+  }
+  $("gozlem").innerHTML = `
+    <div class="bas"><b>${esc(istAd(s.ad))} (${esc(s.id)})</b><span>${Math.round(s.km)} km · ${saat} <span class="${dk > 90 ? "eski" : ""}">(${dk} dk önce${dk > 90 ? ", eski" : ""})</span></span></div>
+    <div class="ana"><div class="gt">${s.t==null ? "–" : yuv(s.t) + "°"}</div>
+      <div class="gd">${esc(gk.ad)}${olay.length ? " · " + esc(olay.join(", ")) : ""}<small>${tabanlar.length ? "Bulut tabanı: " + esc(tabanlar.join(", ")) : ""}</small></div></div>
+    <div class="cipler">
+      <span class="cip">Görüş <b>${gorus}</b></span><span class="cip">Rüzgâr <b>${ruz}</b></span>
+      <span class="cip">Nem <b>${nem==null ? "–" : "%" + nem}</b></span><span class="cip">Basınç <b>${s.qnh==null ? "–" : s.qnh + " hPa"}</b></span>
+      ${s.td!=null ? `<span class="cip">İşba <b>${yuv(s.td)}°</b></span>` : ""}
+    </div>
+    ${kars}
+    ${liste.length > 1 ? `<div class="cipler">${liste.map(x => `<button type="button" class="cip ist${x.id===s.id ? " aktif" : ""}" data-id="${esc(x.id)}">${esc(istAd(x.ad).split("/")[0])} · ${Math.round(x.km)} km</button>`).join("")}</div>` : ""}
+    <div class="ham" title="Ham METAR raporu">${esc(s.ham||"")}</div>`;
+  $("gozlem").querySelectorAll(".ist").forEach(b => b.onclick = () => { gozlemSecili = b.dataset.id; gozlemCiz(); });
 }
 
 /* ---------- görünüm (tema) ---------- */
