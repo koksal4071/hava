@@ -1,0 +1,665 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#0b3a66">
+<title>Hava Durumu</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+/* VOICE: sakin, net, kamu hizmeti duyurusu gibi güvenilir
+   IDEA: meteoroloji istasyonu kartı — anlık değerler tabelası + uyarı şeridi
+   PICTURE: büyük sıcaklık ve gökyüzü ikonu, altında 48 saatlik sıcaklık/yağış grafiği
+   COLOUR: gece mavisi gökyüzü zemin, beyaz kartlar, uyarılar turuncu/kırmızı
+   TYPE: Figtree; LAYOUT: tek sütun, geniş ekranda 2 sütunlu ızgara */
+:root{color-scheme:light dark;
+--gok:light-dark(#0b3a66,#06182b);--gok2:light-dark(#1f6fb2,#0d2f52);
+--bg:light-dark(#eef3f8,#0a111b);--kart:light-dark(#fff,#111b28);--ink:light-dark(#0e1b2b,#e6edf5);
+--soluk:light-dark(#5b6b7d,#93a4b8);--cizgi:light-dark(#dde5ee,#223246);--mavi:#2b7bd0;--yagis:#3b9be8;
+--sari:#f4b400;--turuncu:#f08a00;--kirmizi:#d93a2b;--yesil:#1f9d63}
+:root[data-theme=light]{color-scheme:light}:root[data-theme=dark]{color-scheme:dark}
+*{box-sizing:border-box;min-width:0}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 Figtree,"Segoe UI",system-ui,sans-serif;overflow-x:clip}
+button,input{font:inherit}
+.ust{background:linear-gradient(160deg,var(--gok),var(--gok2));color:#fff;padding:18px max(4vw,14px) 26px}
+.ara{display:flex;gap:8px;max-width:1100px;margin:0 auto;position:relative}
+.ara input{flex:1;height:48px;border-radius:12px;border:0;padding:0 16px;font-size:16px;color:#0e1b2b;background:#fff}
+.ara input:focus{outline:3px solid var(--sari)}
+.btn{height:48px;min-width:48px;border-radius:12px;border:1px solid rgba(255,255,255,.35);background:rgba(255,255,255,.12);
+color:#fff;padding:0 14px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:6px}
+.btn:hover{background:rgba(255,255,255,.22)}.btn:focus-visible{outline:3px solid var(--sari)}
+.oneri{position:absolute;top:54px;left:0;right:0;background:var(--kart);color:var(--ink);border-radius:12px;
+box-shadow:0 10px 30px rgba(0,0,0,.25);z-index:5;overflow:hidden;display:none}
+.oneri button{display:block;width:100%;text-align:left;padding:12px 16px;border:0;background:none;color:inherit;cursor:pointer;border-bottom:1px solid var(--cizgi)}
+.oneri button:hover,.oneri button:focus{background:light-dark(#eef5fc,#18263a);outline:0}
+.oneri small{color:var(--soluk)}
+.favs{max-width:1100px;margin:10px auto 0;display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.modelsec{max-width:1100px;margin:10px auto 0;display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:14px}
+.modelsec select{height:40px;border-radius:10px;border:1px solid rgba(255,255,255,.35);background:rgba(255,255,255,.12);color:#fff;padding:0 10px;font-size:15px}
+.modelsec select option{color:#0e1b2b}.modelsec select:focus-visible{outline:3px solid var(--sari)}
+.mnot{opacity:.8;font-size:13px}
+.kar-ac{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px}
+.kar-ac label{display:inline-flex;align-items:center;gap:6px;font-size:14px;padding:6px 10px;border:1px solid var(--cizgi);border-radius:999px;cursor:pointer}
+.kar-ac i{width:12px;height:12px;border-radius:3px;display:inline-block}
+.uyum{display:inline-block;font-size:12px;font-weight:700;padding:2px 8px;border-radius:999px;color:#fff}
+.ktab td{font-size:14px}.ktab td small{color:var(--soluk)}.ktab th{white-space:nowrap}
+.fav{border:0;border-radius:999px;padding:5px 12px;background:rgba(255,255,255,.14);color:#fff;cursor:pointer;font-size:14px}
+.fav.aktif{background:#fff;color:#0b3a66;font-weight:600}
+.anlik{max-width:1100px;margin:18px auto 0;display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,1fr);gap:22px;align-items:center}
+.yer{font-size:clamp(26px,4vw,40px);font-weight:800;line-height:1.05;margin:0}
+.yer small{display:block;font-size:14px;font-weight:500;opacity:.8;margin-top:6px}
+.sicak{display:flex;align-items:center;gap:14px;margin-top:12px}
+.sicak svg{width:clamp(84px,12vw,120px);height:auto;flex:none}
+.derece{font-size:clamp(64px,10vw,104px);font-weight:800;line-height:.9;letter-spacing:-2px}
+.durum{font-size:19px;font-weight:600}.his{opacity:.85;font-size:15px}
+.olcum{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.olc{background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.16);border-radius:14px;padding:10px 12px}
+.olc b{display:block;font-size:20px;font-weight:700;white-space:nowrap}.olc span{font-size:13px;opacity:.85}
+.ok{display:inline-block;transition:transform .6s}
+.zaman{max-width:1100px;margin:12px auto 0;font-size:13px;opacity:.8;display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap}
+main{max-width:1100px;margin:0 auto;padding:18px max(4vw,14px) 40px}
+.uyarilar{display:grid;gap:8px;margin-top:-34px;position:relative}
+.uyari{display:flex;gap:12px;align-items:flex-start;border-radius:14px;padding:12px 16px;background:var(--kart);
+border:1px solid var(--cizgi);box-shadow:0 4px 14px rgba(0,0,0,.08)}
+.uyari i{flex:none;width:12px;height:12px;border-radius:50%;margin-top:6px}
+.uyari b{display:block}.uyari span{color:var(--soluk);font-size:14px}
+.uyari.kirmizi{border-left:6px solid var(--kirmizi)}.uyari.turuncu{border-left:6px solid var(--turuncu)}
+.uyari.sari{border-left:6px solid var(--sari)}.uyari.yesil{border-left:6px solid var(--yesil)}
+h2{font-size:19px;margin:28px 0 12px}h2 small{font-weight:500;color:var(--soluk);font-size:14px;margin-left:6px}
+.kart{background:var(--kart);border:1px solid var(--cizgi);border-radius:16px;padding:16px}
+.yag{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+.yk{background:var(--kart);border:1px solid var(--cizgi);border-radius:16px;padding:14px}
+.yk .s{font-size:13px;color:var(--soluk)}.yk .m{font-size:26px;font-weight:800;white-space:nowrap;margin:2px 0}
+.yk .m small{font-size:14px;font-weight:600}.yk .o{font-size:13px}
+.cub{height:6px;border-radius:4px;background:var(--cizgi);margin-top:8px;overflow:hidden}.cub>div{height:100%;background:var(--yagis)}
+.fig{position:relative;height:230px}.fig svg{position:absolute;inset:0;width:100%;height:100%}
+.efs{display:flex;gap:16px;font-size:13px;color:var(--soluk);margin-top:6px;flex-wrap:wrap}
+.efs i{display:inline-block;width:12px;height:12px;border-radius:3px;margin-right:5px;vertical-align:-1px}
+.scroll{overflow-x:auto}.kisa{display:none}table{width:100%;border-collapse:collapse}
+th{font-size:13px;color:var(--soluk);font-weight:600;text-align:left;padding:8px 6px;border-bottom:1px solid var(--cizgi)}
+td{padding:9px 6px;border-bottom:1px solid var(--cizgi);vertical-align:middle}
+td.n,th.n{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
+.gun b{display:block}.gun>span{font-size:13px;color:var(--soluk)}
+.ic{display:flex;align-items:center;gap:8px}.ic svg{width:34px;height:34px;flex:none}
+.aralik{position:relative;height:8px;border-radius:5px;background:var(--cizgi);min-width:90px}
+.aralik>div{position:absolute;top:0;bottom:0;border-radius:5px;background:linear-gradient(90deg,#4aa3f0,#f4b400,#e8590c)}
+.durumyok{padding:40px 10px;text-align:center;color:var(--soluk)}
+.donemler{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.donem h3{margin:0;font-size:16px}.donem .t{color:var(--soluk);font-size:13px}
+.satir{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:9px;font-size:14px}
+.rozet{display:inline-block;padding:2px 9px;border-radius:999px;font-size:12px;font-weight:700;color:#fff;white-space:nowrap}
+.isi th{text-align:center;font-size:12px;line-height:1.25;padding:6px 2px}.isi th:first-child{text-align:left}
+.isi td{text-align:center;font-size:12.5px;padding:6px 2px;border:2px solid var(--kart);font-variant-numeric:tabular-nums}
+.isi td:first-child{text-align:left;white-space:nowrap;font-size:13px;padding-right:8px;border:0}
+.karalan{margin-top:12px}
+.karkart{background:linear-gradient(135deg,light-dark(#eaf4ff,#10243b),var(--kart));border:1px solid var(--cizgi);border-radius:16px;padding:16px;display:grid;grid-template-columns:auto minmax(0,1fr);gap:16px;align-items:center}
+.karkart svg{width:56px;height:56px}.karkart .buyuk{font-size:28px;font-weight:800;line-height:1.1}
+.karkart .alt{color:var(--soluk);font-size:14px}
+.cipler{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}
+.cip{border:1px solid var(--cizgi);border-radius:999px;padding:4px 10px;font-size:13px;background:var(--kart);white-space:nowrap}
+.cip b{font-weight:700}.karyok{margin-top:12px;color:var(--soluk);font-size:14px;display:flex;gap:8px;align-items:center}
+footer{max-width:1100px;margin:0 auto;padding:0 max(4vw,14px) 40px;color:var(--soluk);font-size:13px}
+footer a{color:inherit}
+@media(max-width:820px){.donemler{grid-template-columns:1fr}.anlik{grid-template-columns:1fr}.yag{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:600px){.ara{gap:6px}.ara .btn{min-width:44px;padding:0 10px}.ust{padding-inline:12px}main{padding-inline:12px}.gun>span{font-size:12px}.olcum{grid-template-columns:repeat(2,minmax(0,1fr))}.gizle{display:none}td,th{padding:8px 4px;font-size:14px}
+.ic span{display:none}.ic svg{width:28px;height:28px}.aralik{min-width:50px}.uzun{display:none}.kisa{display:inline}}
+@media(prefers-reduced-motion:reduce){.ok{transition:none}}
+</style>
+</head>
+<body>
+<header class="ust">
+  <form class="ara" id="form" autocomplete="off">
+    <input id="q" type="search" placeholder="Şehir ya da ilçe ara… (örn. Kırşehir)" aria-label="Şehir ara">
+    <button class="btn" type="submit" aria-label="Ara"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg></button>
+    <button class="btn" type="button" id="konum" title="Konumumu kullan" aria-label="Konumumu kullan">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg></button>
+    <button class="btn" type="button" id="yenile" title="Yenile" aria-label="Yenile">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7"/></svg></button>
+    <div class="oneri" id="oneri" role="listbox"></div>
+  </form>
+  <div class="modelsec"><label for="model">Model:</label><select id="model"></select><span class="mnot" id="mnot"></span></div>
+  <div class="favs" id="favs"></div>
+  <section class="anlik" id="anlik"><div class="durumyok" style="color:#fff">Yükleniyor…</div></section>
+  <div class="zaman" id="zaman"></div>
+</header>
+
+<main>
+  <div class="uyarilar" id="uyarilar"></div>
+
+  <h2>Yağış beklentisi <small>önümüzdeki saatler</small></h2>
+  <div class="yag" id="yag"></div>
+  <div id="kar"></div>
+
+  <h2>48 saat <small>sıcaklık ve saatlik yağış</small></h2>
+  <div class="kart"><div class="fig" id="fig"><svg id="grafik"></svg></div>
+    <div class="efs"><span><i style="background:#e8590c"></i>Sıcaklık (°C)</span><span><i style="background:var(--yagis)"></i>Yağış (mm/saat)</span><span><i style="background:#7fbef5;opacity:.5"></i>Yağış olasılığı</span></div></div>
+
+  <h2 id="tablo-baslik">10 günlük tahmin</h2>
+  <div class="kart" style="padding:6px 10px"><div class="scroll"><table>
+    <thead><tr><th>Gün</th><th><span class="uzun">Durum</span></th><th class="n">Düşük</th><th class="gizle"></th><th class="n">Yüksek</th><th class="n"><span class="uzun">Yağış mm</span><span class="kisa">mm</span></th><th class="n"><span class="uzun">Olasılık</span><span class="kisa">%</span></th><th class="n gizle">Rüzgâr</th></tr></thead>
+    <tbody id="gunler"></tbody></table></div></div>
+
+  <h2>Modeller ne diyor? <small>deterministik modeller + ensemble yayılımı</small></h2>
+  <div class="kart"><div class="kar-ac" id="kac"></div><div class="fig" id="kfig" style="height:280px"><svg id="kgrafik"></svg></div>
+    <div class="efs" id="kdurum">Karşılaştırma yükleniyor…</div></div>
+  <div class="kart" style="padding:6px 10px;margin-top:12px"><div class="scroll"><table class="ktab" id="ktab"></table></div></div>
+
+  <h2 id="kis">Kış sinyali <small>GEFS + ECMWF ENS · 500/850 hPa desen analizi · 15 gün</small></h2>
+  <div class="donemler" id="kdonem"><div class="kart durumyok">Bu bölüm ekrana gelince hesaplanır…</div></div>
+  <div class="kart" style="padding:6px 10px;margin-top:12px"><div class="scroll"><table class="isi" id="kisi"></table></div></div>
+  <div class="efs" id="kisdurum" style="margin-top:8px"></div>
+</main>
+<footer>
+  Veri: <a href="https://open-meteo.com/" rel="noopener">Open-Meteo</a> (ECMWF, DWD ICON, NOAA GFS vb. modellerin en uygun birleşimi). Sayfa her açılışta ve açık kaldıkça 10 dakikada bir güncellenir.
+  Uyarılar model verisinden otomatik üretilir, resmî değildir; resmî uyarılar için <a href="https://www.mgm.gov.tr/" rel="noopener">Meteoroloji Genel Müdürlüğü</a>.
+</footer>
+
+<script>
+{
+const VARSAYILAN = {ad:"Kırşehir", ek:"Kırşehir, Türkiye", lat:39.1458, lon:34.1639};
+const KOD = {0:"Açık",1:"Çoğunlukla açık",2:"Parçalı bulutlu",3:"Kapalı",45:"Sisli",48:"Kırağılı sis",
+51:"Hafif çisenti",53:"Çisenti",55:"Yoğun çisenti",56:"Donan çisenti",57:"Yoğun donan çisenti",
+61:"Hafif yağmur",63:"Yağmurlu",65:"Kuvvetli yağmur",66:"Donan yağmur",67:"Kuvvetli donan yağmur",
+71:"Hafif kar",73:"Karlı",75:"Yoğun kar",77:"Kar taneleri",80:"Hafif sağanak",81:"Sağanak",82:"Kuvvetli sağanak",
+85:"Hafif kar sağanağı",86:"Kuvvetli kar sağanağı",95:"Gök gürültülü sağanak",96:"Dolu ihtimalli fırtına",99:"Kuvvetli dolu ve fırtına"};
+const GUN = ["Pazar","Pazartesi","Salı","Çarşamba","Perşembe","Cuma","Cumartesi"], GUNK = ["Paz","Pzt","Sal","Çar","Per","Cum","Cmt"];
+const YON = ["Kuzey","Kuzeydoğu","Doğu","Güneydoğu","Güney","Güneybatı","Batı","Kuzeybatı"];
+const $ = id => document.getElementById(id);
+const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const yuv = (x, d=0) => { if(x==null||isNaN(x)) return "–"; let v = +Number(x).toFixed(d); if(v===0) v = 0; return v.toLocaleString("tr-TR",{minimumFractionDigits:d,maximumFractionDigits:d}); };
+const ls = {get(k,d){try{return JSON.parse(localStorage.getItem(k))??d}catch(e){return d}},set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}};
+
+const MODELLER = {
+  auto:  {ad:"Otomatik (en uygun)", aday:[null]},
+  ecmwf: {ad:"ECMWF IFS", aday:["ecmwf_ifs025","ecmwf_ifs"], renk:"#d93a2b"},
+  aifs:  {ad:"ECMWF AIFS (yapay zekâ)", aday:["ecmwf_aifs025_single","ecmwf_aifs025"], renk:"#9b59b6"},
+  gfs:   {ad:"NOAA GFS", aday:["gfs_seamless","gfs_global"], renk:"#2b7bd0"},
+  icon:  {ad:"DWD ICON", aday:["icon_seamless","icon_global"], renk:"#1f9d63"},
+  mf:    {ad:"Météo-France", aday:["meteofrance_seamless","meteofrance_arpege_world"], renk:"#f08a00"},
+  ukmo:  {ad:"UK Met Office", aday:["ukmo_seamless","ukmo_global_deterministic_10km"], renk:"#64748b"},
+};
+const KARSILASTIR = ["ecmwf","aifs","gfs","icon"];
+const ENSEMBLE = {
+  gefs: {ad:"GEFS", uye:31, aday:["gfs025","gfs05","gfs_seamless"], renk:"#2b7bd0"},
+  ens:  {ad:"ECMWF ENS", uye:51, aday:["ecmwf_ifs025","ecmwf_ifs04"], renk:"#d93a2b"},
+};
+let yer = ls.get("hava_yer", VARSAYILAN), veri = null, sonGuncelleme = 0, model = ls.get("hava_model", "auto"), kveri = null;
+if(!MODELLER[model]) model = "auto";
+
+/* ---------- ikonlar ---------- */
+function tur(k){ if(k<=1) return "gunes"; if(k==2) return "parcali"; if(k==3) return "bulut"; if(k==45||k==48) return "sis";
+  if((k>=71&&k<=77)||k==85||k==86) return "kar"; if(k>=95) return "simsek"; return "yagmur"; }
+function ikon(k, gunduz=1){
+  if(k==null) return '<svg viewBox="0 0 64 64" aria-hidden="true"><path d="M22 32h20" stroke="#93a4b8" stroke-width="3" stroke-linecap="round"/></svg>';
+  const t = tur(k), gun = gunduz ? '<circle cx="24" cy="22" r="10" fill="#f4b400"/><g stroke="#f4b400" stroke-width="3" stroke-linecap="round"><path d="M24 4v4M24 36v4M6 22h4M38 22h4M11 9l3 3M34 32l3 3M11 35l3-3M34 12l3-3"/></g>'
+    : '<path d="M30 8a14 14 0 1 0 10 22 12 12 0 0 1-10-22z" fill="#cfd8e6"/>';
+  const bulut = (r="#fff",s="#c9d6e4") => `<path d="M18 46h26a10 10 0 0 0 0-20 13 13 0 0 0-25-2 9 9 0 0 0-1 22z" fill="${r}" stroke="${s}" stroke-width="1.5"/>`;
+  let ic = "";
+  if(t=="gunes") ic = gun;
+  else if(t=="parcali") ic = `<g transform="translate(-4,-4) scale(.85)">${gun}</g>` + bulut();
+  else if(t=="bulut") ic = `<g transform="translate(-6,-8)">${bulut("#dfe7f0","#b7c6d6")}</g>` + bulut();
+  else if(t=="sis") ic = bulut("#e3e8ee","#c3ccd6") + '<g stroke="#9fb0c2" stroke-width="3" stroke-linecap="round"><path d="M10 52h36M16 58h32"/></g>';
+  else if(t=="yagmur") ic = bulut("#dfe7f0","#b7c6d6") + '<g stroke="#3b9be8" stroke-width="3" stroke-linecap="round"><path d="M20 50l-3 8M30 50l-3 8M40 50l-3 8"/></g>';
+  else if(t=="kar") ic = bulut("#eef3f8","#c3ccd6") + '<g fill="#7fbef5"><circle cx="20" cy="54" r="3"/><circle cx="31" cy="58" r="3"/><circle cx="42" cy="54" r="3"/></g>';
+  else ic = bulut("#c9d3de","#9fb0c2") + '<path d="M31 46l-7 10h6l-4 9 11-13h-6l4-6z" fill="#f4b400"/>';
+  return `<svg viewBox="0 0 64 64" aria-hidden="true">${ic}</svg>`;
+}
+
+/* ---------- veri ---------- */
+const FC = "https://api.open-meteo.com/v1/forecast", ENS_URL = "https://ensemble-api.open-meteo.com/v1/ensemble";
+async function getir(){
+  const p = new URLSearchParams({latitude:yer.lat, longitude:yer.lon, timezone:"auto", forecast_days:10, past_hours:6,
+    current:"temperature_2m,relative_humidity_2m,apparent_temperature,is_day,precipitation,weather_code,cloud_cover,pressure_msl,wind_speed_10m,wind_direction_10m,wind_gusts_10m",
+    minutely_15:"precipitation",
+    hourly:"temperature_2m,precipitation,precipitation_probability,snowfall,snow_depth,weather_code,pressure_msl,wind_gusts_10m",
+    daily:"weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,precipitation_probability_max,snowfall_sum,wind_speed_10m_max,wind_gusts_10m_max,sunrise,sunset"});
+  if(model === "auto"){ const {json} = await modelIstek(FC, "f_auto", [null], p); json._modelId = null; return json; }
+  const tahmin = new URLSearchParams(p); tahmin.delete("current"); tahmin.delete("minutely_15");
+  const [t, b] = await Promise.all([modelIstek(FC, "f_"+model, MODELLER[model].aday, tahmin), modelIstek(FC, "f_auto", [null], p)]);
+  const j = t.json;  // seçilen modelin saatlik/günlük tahmini
+  j.current = b.json.current; j.minutely_15 = b.json.minutely_15; j.elevation = b.json.elevation;
+  j.daily.sunrise = b.json.daily.sunrise; j.daily.sunset = b.json.daily.sunset;
+  if(!j.hourly.time.includes(j.current.time.slice(0,13)+":00")) Object.assign(j, {hourly:b.json.hourly, _yedek:true});
+  j._modelId = t.id; return j;
+}
+/* Model adı denemesi: kabul edilen ilk adı kullan, tarayıcıda hatırla */
+async function modelIstek(url, anahtar, adaylar, params, kontrol="temperature_2m"){
+  const bilinen = ls.get("mid_"+anahtar, undefined);
+  const sira = bilinen !== undefined && adaylar.includes(bilinen) ? [bilinen, ...adaylar.filter(a=>a!==bilinen)] : adaylar;
+  let sonHata = "model bulunamadı";
+  for(const id of sira){
+    const p = new URLSearchParams(params); if(id) p.set("models", id);
+    try{
+      const r = await fetch(url + "?" + p), j = await r.json();
+      if(!r.ok || j.error){ sonHata = j.reason || ("HTTP " + r.status); continue; }
+      const j0 = Array.isArray(j) ? j[0] : j;
+      const ilk = j0.hourly ? Object.keys(j0.hourly).find(k => k.startsWith(kontrol)) : null;
+      if(!ilk || j0.hourly[ilk].every(v => v == null)){ sonHata = kontrol + " verisi yok"; continue; }
+      ls.set("mid_"+anahtar, id); return {json:j, id};
+    }catch(e){ sonHata = e.message; }
+  }
+  throw new Error(sonHata);
+}
+async function yukle(){
+  $("zaman").textContent = "Güncelleniyor…";
+  kveri = null; kisYenile();
+  try { veri = await getir(); sonGuncelleme = Date.now(); ciz(); karsilastir(); }
+  catch(e){ $("zaman").textContent = "Veri alınamadı (" + e.message + "). İnternet bağlantını kontrol edip yenile."; }
+}
+
+/* ---------- hesaplar ---------- */
+function simdiIndeks(h, cur){ const k = cur.time.slice(0,13)+":00"; let i = h.time.indexOf(k); return i<0 ? 0 : i; }
+function pencere(h, i, n){
+  const dil = (a) => a.slice(i+1, i+1+n);
+  const mm = dil(h.precipitation), pr = dil(h.precipitation_probability), sn = dil(h.snowfall), kod = dil(h.weather_code);
+  return {top: mm.reduce((a,b)=>a+(b||0),0), maks: Math.max(0,...mm.map(x=>x||0)), olas: pr.some(x=>x!=null) ? Math.max(0,...pr.map(x=>x||0)) : null,
+          kar: sn.reduce((a,b)=>a+(b||0),0), simsek: kod.some(k=>k>=95), zaman: h.time.slice(i+1,i+1+n)};
+}
+function ilkSaat(p, kosul){ const j = p.zaman.findIndex((_,x)=>kosul(x)); return j<0 ? null : p.zaman[j].slice(11,16); }
+
+function uyarilariHesapla(d){
+  const h = d.hourly, i = simdiIndeks(h, d.current), u = [];
+  const s1 = pencere(h,i,1), s3 = pencere(h,i,3), s6 = pencere(h,i,6), s12 = pencere(h,i,12), s24 = pencere(h,i,24);
+  const hp3 = h.precipitation.slice(i+1,i+4);
+  if(s3.simsek) u.push(["kirmizi","3 saat içinde gök gürültülü sağanak", "Yıldırım ve ani kuvvetli yağış riski. İlk olası saat: " + (ilkSaat(s3,x=>h.weather_code[i+1+x]>=95)||"–")]);
+  if(s3.maks>=8 || s3.top>=15) u.push(["kirmizi","3 saat içinde KUVVETLİ YAĞMUR", `3 saatte ${yuv(s3.top,1)} mm bekleniyor, saatlik en fazla ${yuv(s3.maks,1)} mm (${ilkSaat(s3,x=>hp3[x]>=4)||"–"}). Sel ve su baskınına dikkat.`]);
+  else if(s3.maks>=4 || s3.top>=8) u.push(["turuncu","3 saat içinde kuvvetli yağış", `3 saatte ${yuv(s3.top,1)} mm, saatlik en fazla ${yuv(s3.maks,1)} mm.`]);
+  else if(s3.top>=0.5) u.push(["sari","3 saat içinde yağış bekleniyor", `${yuv(s3.top,1)} mm${s3.olas!=null?", olasılık %"+s3.olas:""}. Başlangıç: ${ilkSaat(s3,x=>(hp3[x]||0)>=0.2)||"–"}`]);
+  if(s12.top>=40) u.push(["kirmizi","12 saatte çok kuvvetli yağış", `Toplam ${yuv(s12.top,0)} mm bekleniyor.`]);
+  else if(s12.top>=20) u.push(["turuncu","12 saatte kuvvetli yağış", `Toplam ${yuv(s12.top,0)} mm bekleniyor.`]);
+  if(s12.kar>=5) u.push(["turuncu","Kar yağışı", `12 saatte ${yuv(s12.kar,0)} cm kar bekleniyor. Buzlanma ve ulaşımda aksamalara dikkat.`]);
+  else if(s12.kar>=0.5) u.push(["sari","Kar yağışı", `12 saatte ${yuv(s12.kar,1)} cm kar bekleniyor.`]);
+  const ruz = Math.max(0,...h.wind_gusts_10m.slice(i+1,i+13).map(x=>x||0));
+  if(ruz>=75) u.push(["kirmizi","Fırtına", `12 saat içinde ${yuv(ruz)} km/sa'e varan rüzgâr hamleleri.`]);
+  else if(ruz>=50) u.push(["turuncu","Kuvvetli rüzgâr", `12 saat içinde ${yuv(ruz)} km/sa'e varan hamleler.`]);
+  const t24 = h.temperature_2m.slice(i+1,i+25).filter(v=>v!=null), tmin = t24.length ? Math.min(...t24) : 99;
+  if(tmin<=-10) u.push(["turuncu","Çok soğuk", `24 saat içinde ${yuv(tmin)}°C'ye kadar düşüş.`]);
+  else if(tmin<=0) u.push(["sari","Don ve buzlanma", `24 saat içinde sıcaklık ${yuv(tmin)}°C'ye düşüyor.`]);
+  const tmax = t24.length ? Math.max(...t24) : -99;
+  if(tmax>=37) u.push(["turuncu","Aşırı sıcak", `24 saat içinde ${yuv(tmax)}°C.`]);
+  if(!u.length) u.push(["yesil","Önümüzdeki 12 saat için uyarı yok", s24.top>=0.5 ? `24 saatte ${yuv(s24.top,1)} mm yağış olası${s24.olas!=null?" (olasılık %"+s24.olas+")":""}.` : "Yağış beklenmiyor."]);
+  return {u, pencereler:[["1 saat",s1],["3 saat",s3],["6 saat",s6],["12 saat",s12]], i};
+}
+
+/* ---------- çizim ---------- */
+function ciz(){
+  const d = veri, c = d.current, h = d.hourly, g = d.daily;
+  const {u, pencereler, i} = uyarilariHesapla(d);
+  // 1 saatlik pencereyi 15 dakikalık veriyle inceltmeye çalış
+  if(d.minutely_15 && d.minutely_15.precipitation){
+    const m = d.minutely_15, k = m.time.findIndex(t => t >= c.time);
+    if(k>=0){ const v = m.precipitation.slice(k,k+4); if(v.length==4 && v.every(x=>x!=null)) pencereler[0][1].top = v.reduce((a,b)=>a+b,0); }
+  }
+  const basGecmis = h.pressure_msl[Math.max(0,i-3)], basEgilim = c.pressure_msl - basGecmis;
+  const egilim = Math.abs(basEgilim) < 0.8 ? "sabit" : basEgilim > 0 ? "yükseliyor" : "düşüyor";
+  const yonI = Math.round(c.wind_direction_10m/45)%8;
+
+  document.title = `${Math.round(c.temperature_2m)}° ${yer.ad} — Hava Durumu`;
+  $("anlik").innerHTML = `
+    <div><h1 class="yer">${esc(yer.ad)}<small>${esc(yer.ek||"")}</small></h1>
+      <div class="sicak">${ikon(c.weather_code, c.is_day)}<div><div class="derece">${Math.round(c.temperature_2m)}°</div>
+      <div class="durum">${KOD[c.weather_code]||"–"}</div><div class="his">Hissedilen ${yuv(c.apparent_temperature)}° · Bugün ${yuv(g.temperature_2m_min[0])}° / ${yuv(g.temperature_2m_max[0])}°</div></div></div></div>
+    <div class="olcum">
+      <div class="olc"><span>Basınç</span><b>${yuv(c.pressure_msl)} hPa</b><span>${egilim} (3 sa: ${basEgilim>=0?"+":""}${yuv(basEgilim,1)})</span></div>
+      <div class="olc"><span>Rüzgâr</span><b><span class="ok" style="transform:rotate(${c.wind_direction_10m+180}deg)">↑</span> ${yuv(c.wind_speed_10m)} km/sa</b><span>${YON[yonI]} · hamle ${yuv(c.wind_gusts_10m)}</span></div>
+      <div class="olc"><span>Nem</span><b>%${yuv(c.relative_humidity_2m)}</b><span>Bulut %${yuv(c.cloud_cover)}</span></div>
+      <div class="olc"><span>Şu an yağış</span><b>${yuv(c.precipitation,1)} mm</b><span>son 15 dk</span></div>
+      <div class="olc"><span>Gün doğumu</span><b>${g.sunrise[0].slice(11)}</b><span>batımı ${g.sunset[0].slice(11)}</span></div>
+      <div class="olc"><span>Yükseklik</span><b>${yuv(d.elevation)} m</b><span>${yuv(yer.lat,2)}°K ${yuv(yer.lon,2)}°D</span></div>
+    </div>`;
+  const z = new Date(sonGuncelleme);
+  $("mnot").textContent = model==="auto" ? "Open-Meteo bölgeye göre en iyi modelleri birleştirir" : `Tahmin: ${d._modelId}${d._yedek?" (saatlik veri otomatik)":""} · anlık değerler: otomatik`;
+  $("tablo-baslik").innerHTML = `10 günlük tahmin <small>${esc(MODELLER[model].ad)}</small>`;
+  $("zaman").innerHTML = `<span>Ölçüm zamanı (yerel): ${c.time.replace("T"," ")}</span><span>Sayfa güncellendi: ${z.toLocaleTimeString("tr-TR",{hour:"2-digit",minute:"2-digit"})}</span>`;
+
+  $("uyarilar").innerHTML = u.map(([r,b,a]) => `<div class="uyari ${r}" role="alert"><i style="background:var(--${r})"></i><div><b>${esc(b)}</b><span>${esc(a)}</span></div></div>`).join("");
+
+  $("yag").innerHTML = pencereler.map(([ad,p]) => {
+    const yuzde = Math.min(100, p.top/20*100);
+    return `<div class="yk"><div class="s">${ad} içinde</div><div class="m">${yuv(p.top,1)} <small>mm</small></div>
+      <div class="o">${p.olas==null?"Olasılık –":"Olasılık %"+p.olas}${p.kar>0.05?` · kar ${yuv(p.kar,1)} cm`:""}${p.simsek?" · gök gürültülü":""}</div>
+      <div class="cub"><div style="width:${yuzde}%"></div></div></div>`;}).join("");
+
+  $("gunler").innerHTML = g.time.map((t,k) => {
+    const dt = new Date(t+"T12:00"), uz = k==0 ? "Bugün" : k==1 ? "Yarın" : GUN[dt.getDay()], ad = `<span class="uzun">${uz}</span><span class="kisa">${k<2?uz:GUNK[dt.getDay()]}</span>`;
+    const mins = g.temperature_2m_min.filter(v=>v!=null), maxs = g.temperature_2m_max.filter(v=>v!=null);
+    const lo = Math.min(...mins), hi = Math.max(...maxs), w = hi-lo || 1, var_ = g.temperature_2m_min[k]!=null && g.temperature_2m_max[k]!=null;
+    const sol = var_ ? (g.temperature_2m_min[k]-lo)/w*100 : 0, gen = var_ ? (g.temperature_2m_max[k]-g.temperature_2m_min[k])/w*100 : 0;
+    const kar = (g.snowfall_sum?.[k]||0) > 0.05 ? `<br><small>kar ${yuv(g.snowfall_sum[k],1)} cm</small>` : "";
+    return `<tr><td class="gun"><b>${ad}</b><span>${dt.toLocaleDateString("tr-TR",{day:"numeric",month:"short"})}</span></td>
+      <td><div class="ic">${ikon(g.weather_code[k])}<span>${KOD[g.weather_code[k]]||""}</span></div></td>
+      <td class="n">${yuv(g.temperature_2m_min[k])}°</td>
+      <td class="gizle">${var_ ? `<div class="aralik"><div style="left:${sol}%;width:${Math.max(gen,4)}%"></div></div>` : `<small style="color:var(--soluk)">model kapsamı dışında</small>`}</td>
+      <td class="n"><b>${yuv(g.temperature_2m_max[k])}°</b></td>
+      <td class="n">${yuv(g.precipitation_sum[k],1)}${kar}</td>
+      <td class="n">${g.precipitation_probability_max[k]==null?"–":`<span class="uzun">%</span>${yuv(g.precipitation_probability_max[k])}`}</td>
+      <td class="n gizle">${g.wind_gusts_10m_max[k]==null?"–":yuv(g.wind_gusts_10m_max[k])+" km/sa"}</td></tr>`;}).join("");
+
+  grafik();
+  favCiz();
+  karKarti();
+}
+
+const svg = $("grafik");
+function grafik(){
+  if(!veri) return;
+  const h = veri.hourly, i = simdiIndeks(h, veri.current), n = 48;
+  const t = h.time.slice(i,i+n), T = h.temperature_2m.slice(i,i+n), P = h.precipitation.slice(i+1,i+1+n), O = h.precipitation_probability.slice(i+1,i+1+n);
+  const W = svg.clientWidth, H = svg.clientHeight, sl = 34, sg = 40, us = 14, al = 30, dar = W < 520;
+  const gw = W-sl-sg, gh = H-us-al, x = k => sl + k*(gw/(n-1));
+  const Tv = T.filter(v=>v!=null), tmin = Math.floor(Math.min(...Tv))-1, tmax = Math.ceil(Math.max(...Tv))+1, ty = v => us + (tmax-v)/(tmax-tmin)*gh;
+  const pmax = Math.max(4, ...P.map(v=>v||0)), py = v => us + gh - (v/pmax)*gh, bw = Math.max(2, gw/n*0.7);
+  let s = "";
+  for(let k=0;k<=4;k++){ const v = tmin + (tmax-tmin)*k/4, y = ty(v);
+    s += `<line x1="${sl}" x2="${W-sg}" y1="${y}" y2="${y}" stroke="var(--cizgi)"/><text x="${sl-6}" y="${y+4}" text-anchor="end" font-size="11" fill="var(--soluk)">${Math.round(v)}°</text>`;
+    s += `<text x="${W-sg+6}" y="${py(pmax*k/4)+4}" font-size="11" fill="var(--soluk)">${yuv(pmax*k/4,1)}</text>`; }
+  (O||[]).forEach((v,k)=>{ if(v) s += `<rect x="${x(k)-bw/2}" y="${py(pmax*v/100)}" width="${bw}" height="${us+gh-py(pmax*v/100)}" fill="#7fbef5" opacity=".18"/>`; });
+  P.forEach((v,k)=>{ if(v>0) s += `<rect x="${x(k)-bw/2}" y="${py(v)}" width="${bw}" height="${us+gh-py(v)}" rx="1.5" fill="var(--yagis)"><title>${t[k]?.slice(11,16)||""}: ${yuv(v,1)} mm</title></rect>`; });
+  t.forEach((z,k)=>{ const saat = +z.slice(11,13); if(saat==0){ s += `<line x1="${x(k)}" x2="${x(k)}" y1="${us}" y2="${us+gh}" stroke="var(--soluk)" stroke-dasharray="3 4" opacity=".6"/>
+      <text x="${x(k)+4}" y="${us+10}" font-size="11" fill="var(--soluk)">${new Date(z).toLocaleDateString("tr-TR",{weekday:"short"})}</text>`; }
+    if(saat % (dar?12:6) == 0) s += `<text x="${x(k)}" y="${H-10}" text-anchor="middle" font-size="11" fill="var(--soluk)">${z.slice(11,16)}</text>`; });
+  s += `<polyline points="${T.map((v,k)=>v==null?null:`${x(k)},${ty(v)}`).filter(Boolean).join(" ")}" fill="none" stroke="#e8590c" stroke-width="2.5" stroke-linejoin="round"/>`;
+  const kmin = T.indexOf(Math.min(...Tv)), kmax = T.indexOf(Math.max(...Tv));
+  [[kmin,-8],[kmax,-8]].forEach(([k,dy])=>{ s += `<circle cx="${x(k)}" cy="${ty(T[k])}" r="3.5" fill="#e8590c"/><text x="${x(k)}" y="${ty(T[k])+dy}" text-anchor="middle" font-size="12" font-weight="700" fill="var(--ink)">${yuv(T[k])}°</text>`; });
+  svg.innerHTML = s;
+}
+const gozlemci = new ResizeObserver(grafik); gozlemci.observe($("fig"));
+
+/* ---------- model karşılaştırma ---------- */
+const kgoster = ls.get("hava_kgoster", {});
+async function karsilastir(){
+  $("kdurum").textContent = "Karşılaştırma yükleniyor…";
+  const temel = {latitude:yer.lat, longitude:yer.lon, timezone:"auto", forecast_days:10,
+    hourly:"temperature_2m,precipitation", daily:"temperature_2m_max,temperature_2m_min,precipitation_sum"};
+  const ens = {latitude:yer.lat, longitude:yer.lon, timezone:"auto", forecast_days:10, hourly:"temperature_2m,precipitation,snowfall"};
+  const isler = [
+    ...KARSILASTIR.map(k => modelIstek("https://api.open-meteo.com/v1/forecast", "k_"+k, MODELLER[k].aday, temel).then(r=>["d",k,r.json])),
+    ...Object.keys(ENSEMBLE).map(k => modelIstek("https://ensemble-api.open-meteo.com/v1/ensemble", "e_"+k, ENSEMBLE[k].aday, ens).then(r=>["e",k,r.json]))];
+  const sonuc = await Promise.allSettled(isler), kv = {det:{}, ens:{}}, eksik = [];
+  sonuc.forEach((r,n) => { if(r.status==="fulfilled"){ const [t,k,j] = r.value; (t==="d"?kv.det:kv.ens)[k] = j; }
+    else eksik.push(n < KARSILASTIR.length ? MODELLER[KARSILASTIR[n]].ad : Object.values(ENSEMBLE)[n-KARSILASTIR.length].ad); });
+  for(const [k,j] of Object.entries(kv.ens)) kv.ens[k] = ensembleOzet(j);
+  kveri = kv;
+  $("kdurum").textContent = eksik.length ? "Alınamayan: " + eksik.join(", ") : "Kalın çizgi: deterministik model · gölgeli bant: ensemble %10–90 aralığı";
+  kacCiz(); kgrafik(); ktablo(); karKarti();
+}
+function uyeler(h, ad){ return Object.keys(h).filter(k => k===ad || new RegExp("^"+ad+"_member\\d+").test(k)).map(k => h[k]); }
+function yuzdelik(a, q){ const b = a.filter(v=>v!=null).sort((x,y)=>x-y); if(!b.length) return null; const i = (b.length-1)*q, a0 = Math.floor(i); return b[a0] + (b[Math.min(a0+1,b.length-1)]-b[a0])*(i-a0); }
+function ensembleOzet(j){
+  const h = j.hourly, T = uyeler(h,"temperature_2m"), P = uyeler(h,"precipitation"), S = uyeler(h,"snowfall"), n = h.time.length;
+  const saat = {time:h.time, q10:[], q50:[], q90:[]};
+  for(let i=0;i<n;i++){ const v = T.map(m=>m[i]); saat.q10.push(yuzdelik(v,.1)); saat.q50.push(yuzdelik(v,.5)); saat.q90.push(yuzdelik(v,.9)); }
+  const gunler = [...new Set(h.time.map(t=>t.slice(0,10)))], gun = {};
+  gunler.forEach(g => { const idx = h.time.map((t,i)=>t.startsWith(g)?i:-1).filter(i=>i>=0);
+    const mx = T.map(m=>Math.max(...idx.map(i=>m[i]).filter(v=>v!=null))).filter(isFinite), mn = T.map(m=>Math.min(...idx.map(i=>m[i]).filter(v=>v!=null))).filter(isFinite);
+    if(!mx.length) return;
+    const yg = P.map(m=>idx.reduce((a,i)=>a+(m[i]||0),0));
+    const ks = S.map(m=>idx.reduce((a,i)=>a+(m[i]||0),0));
+    gun[g] = {max:yuzdelik(mx,.5), min:yuzdelik(mn,.5), mm:yuzdelik(yg,.5), olas: Math.round(yg.filter(v=>v>=1).length/yg.length*100),
+              karOlas: S.length ? Math.round(ks.filter(v=>v>=1).length/ks.length*100) : null, karMed: S.length ? yuzdelik(ks,.5) : null, uye:T.length}; });
+  return {saat, gun, uye:T.length};
+}
+function kacCiz(){
+  const ogeler = [...KARSILASTIR.filter(k=>kveri.det[k]).map(k=>[k,MODELLER[k].ad,MODELLER[k].renk]),
+                  ...Object.keys(kveri.ens).map(k=>[k,`${ENSEMBLE[k].ad} (${kveri.ens[k].uye} üye)`,ENSEMBLE[k].renk])];
+  $("kac").innerHTML = ogeler.map(([k,ad,r]) => `<label><input type="checkbox" data-k="${k}" ${kgoster[k]===false?"":"checked"}><i style="background:${r}${kveri.ens[k]?"55":""}"></i>${esc(ad)}</label>`).join("");
+  $("kac").querySelectorAll("input").forEach(c => c.onchange = () => { kgoster[c.dataset.k] = c.checked; ls.set("hava_kgoster", kgoster); kgrafik(); });
+}
+const ksvg = $("kgrafik");
+function kgrafik(){
+  if(!kveri) return;
+  const W = ksvg.clientWidth, H = ksvg.clientHeight, sl = 34, sg = 10, us = 12, al = 26;
+  const goster = k => kgoster[k] !== false;
+  let tmin = Infinity, tmax = -Infinity, t0 = null, t1 = null;
+  const seriler = [];
+  KARSILASTIR.forEach(k => { const j = kveri.det[k]; if(!j || !goster(k)) return;
+    seriler.push({tip:"d", k, t:j.hourly.time, v:j.hourly.temperature_2m}); });
+  Object.entries(kveri.ens).forEach(([k,e]) => { if(goster(k)) seriler.push({tip:"e", k, t:e.saat.time, lo:e.saat.q10, hi:e.saat.q90}); });
+  seriler.forEach(s => { s.t.forEach((t,i) => { const vs = s.tip==="d" ? [s.v[i]] : [s.lo[i], s.hi[i]];
+    vs.forEach(v => { if(v==null) return; tmin = Math.min(tmin,v); tmax = Math.max(tmax,v); });
+    if(t0==null || t<t0) t0 = t; if(t1==null || t>t1) t1 = t; }); });
+  if(!seriler.length || !isFinite(tmin)){ ksvg.innerHTML = ""; return; }
+  tmin = Math.floor(tmin)-1; tmax = Math.ceil(tmax)+1;
+  const ms = t => new Date(t).getTime(), a = ms(t0), b = ms(t1), gw = W-sl-sg, gh = H-us-al;
+  const x = t => sl + (ms(t)-a)/(b-a)*gw, y = v => us + (tmax-v)/(tmax-tmin)*gh;
+  let s = "";
+  for(let k=0;k<=4;k++){ const v = tmin+(tmax-tmin)*k/4; s += `<line x1="${sl}" x2="${W-sg}" y1="${y(v)}" y2="${y(v)}" stroke="var(--cizgi)"/><text x="${sl-6}" y="${y(v)+4}" text-anchor="end" font-size="11" fill="var(--soluk)">${Math.round(v)}°</text>`; }
+  if(tmin<0 && tmax>0) s += `<line x1="${sl}" x2="${W-sg}" y1="${y(0)}" y2="${y(0)}" stroke="#7fbef5" stroke-dasharray="4 4"/>`;
+  const gunler = [...new Set(seriler[0].t.map(t=>t.slice(0,10)))];
+  gunler.forEach((g,i) => { const xx = x(g+"T00:00"); if(xx<sl) return;
+    s += `<line x1="${xx}" x2="${xx}" y1="${us}" y2="${us+gh}" stroke="var(--cizgi)"/>`;
+    if(W>520 || i%2==0) s += `<text x="${xx+3}" y="${H-8}" font-size="11" fill="var(--soluk)">${new Date(g+"T12:00").toLocaleDateString("tr-TR",{day:"numeric",month:"numeric"})}</text>`; });
+  seriler.filter(s=>s.tip==="e").forEach(e => { const r = ENSEMBLE[e.k].renk, ust = [], alt = [];
+    e.t.forEach((t,i) => { if(e.hi[i]!=null){ ust.push(`${x(t)},${y(e.hi[i])}`); alt.unshift(`${x(t)},${y(e.lo[i])}`); } });
+    s += `<polygon points="${ust.concat(alt).join(" ")}" fill="${r}" opacity=".14"/>`; });
+  seriler.filter(s=>s.tip==="d").forEach(d => { const nok = d.t.map((t,i)=>d.v[i]==null?null:`${x(t)},${y(d.v[i])}`).filter(Boolean);
+    s += `<polyline points="${nok.join(" ")}" fill="none" stroke="${MODELLER[d.k].renk}" stroke-width="2" stroke-linejoin="round" opacity=".95"/>`; });
+  ksvg.innerHTML = s;
+}
+const kgozlemci = new ResizeObserver(kgrafik); kgozlemci.observe($("kfig"));
+function ktablo(){
+  const detK = KARSILASTIR.filter(k=>kveri.det[k]), ensK = Object.keys(kveri.ens);
+  const ilk = kveri.det[detK[0]] ? kveri.det[detK[0]].daily.time : Object.keys(kveri.ens[ensK[0]]?.gun||{});
+  if(!ilk || !ilk.length){ $("ktab").innerHTML = ""; return; }
+  let h = `<thead><tr><th>Gün</th>${detK.map(k=>`<th class="n" style="color:${MODELLER[k].renk}">${esc(MODELLER[k].ad.split(" (")[0])}</th>`).join("")}${ensK.map(k=>`<th class="n" style="color:${ENSEMBLE[k].renk}">${ENSEMBLE[k].ad}<br><small>medyan · yağış ≥1mm</small></th>`).join("")}<th class="n">Uyum</th></tr></thead><tbody>`;
+  ilk.forEach((g,i) => {
+    const dt = new Date(g+"T12:00"), ad = i==0?"Bugün":i==1?"Yarın":dt.toLocaleDateString("tr-TR",{weekday:"short",day:"numeric",month:"short"});
+    const maxlar = [];
+    const dh = detK.map(k => { const d = kveri.det[k].daily, j = d.time.indexOf(g); if(j<0||d.temperature_2m_max[j]==null) return `<td class="n">–</td>`;
+      maxlar.push(d.temperature_2m_max[j]);
+      return `<td class="n"><b>${yuv(d.temperature_2m_max[j])}°</b> / ${yuv(d.temperature_2m_min[j])}°<br><small>${yuv(d.precipitation_sum[j],1)} mm</small></td>`; }).join("");
+    const eh = ensK.map(k => { const e = kveri.ens[k].gun[g]; if(!e) return `<td class="n">–</td>`;
+      return `<td class="n"><b>${yuv(e.max)}°</b> / ${yuv(e.min)}°<br><small>${yuv(e.mm,1)} mm · %${e.olas}</small></td>`; }).join("");
+    let uy = `<td class="n">–</td>`;
+    if(maxlar.length>1){ const f = Math.max(...maxlar)-Math.min(...maxlar);
+      const [et,rk] = f<=2 ? ["uyumlu","var(--yesil)"] : f<=5 ? ["kısmen","var(--turuncu)"] : ["ayrışıyor","var(--kirmizi)"];
+      uy = `<td class="n"><span class="uyum" style="background:${rk}">${et}</span><br><small>±${yuv(f/2,1)}°</small></td>`; }
+    h += `<tr><td class="gun"><b>${ad}</b></td>${dh}${eh}${uy}</tr>`; });
+  $("ktab").innerHTML = h + "</tbody>";
+}
+
+
+/* ---------- kar özeti ---------- */
+const KAR_IKON = '<svg viewBox="0 0 48 48" aria-hidden="true"><g stroke="#3b9be8" stroke-width="3" stroke-linecap="round" fill="none"><path d="M24 4v40M6.7 14l34.6 20M6.7 34l34.6-20"/><path d="M18 8l6 5 6-5M18 40l6-5 6 5M7 21l8-1-3-7M41 27l-8 1 3 7M7 27l8 1-3 7M41 21l-8-1 3-7"/></g></svg>';
+function karKarti(){
+  if(!veri) return;
+  const g = veri.daily, h = veri.hourly, i = simdiIndeks(h, veri.current);
+  const ensKar = t => { if(!kveri || !kveri.ens) return null; const v = Object.values(kveri.ens).map(e => e.gun[t]?.karOlas).filter(x => x != null);
+    return v.length ? Math.round(v.reduce((a,b)=>a+b,0)/v.length) : null; };
+  const gunler = g.time.map((t,k) => ({t, cm: g.snowfall_sum?.[k], ens: ensKar(t)}));
+  const toplam = gunler.reduce((a,x) => a + (x.cm||0), 0);
+  const onemli = gunler.filter(x => (x.cm||0) >= 0.1 || (x.ens||0) >= 20);
+  const ensMaks = Math.max(-1, ...gunler.map(x => x.ens ?? -1));
+  if(!onemli.length){
+    $("kar").innerHTML = `<div class="karyok">${KAR_IKON.replace('viewBox','width="18" height="18" viewBox')}10 gün içinde kar beklenmiyor${ensMaks>=0?` · ensemble'da en yüksek kar olasılığı %${ensMaks}`:""}</div>`; return; }
+  const sk = h.snowfall.slice(i+1), j = sk.findIndex(v => (v||0) >= 0.1);
+  const ilk = j < 0 ? null : h.time[i+1+j];
+  const der = (h.snow_depth||[]).slice(i).filter(v => v != null), derMaks = der.length ? Math.max(...der)*100 : null;
+  const gunAd = t => { const d = new Date(t+"T12:00"); return `${GUNK[d.getDay()]} ${d.getDate()}`; };
+  $("kar").innerHTML = `<div class="karkart karalan">${KAR_IKON}<div>
+    <div class="alt">Kar özeti · ${esc(MODELLER[model].ad)}</div>
+    <div class="buyuk">${toplam >= 0.1 ? `${yuv(toplam,1)} cm <small style="font-size:15px;font-weight:600">10 günde toplam</small>` : "Model kar göstermiyor"}</div>
+    <div class="alt">${ilk ? `İlk kar: ${new Date(ilk).toLocaleString("tr-TR",{weekday:"long",day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"})}` : "Önümüzdeki saatlerde kar yok"}${derMaks!=null && derMaks>=0.5 ? ` · kar örtüsü en fazla ${yuv(derMaks)} cm` : ""}</div>
+    <div class="cipler">${onemli.map(x => `<span class="cip"><b>${gunAd(x.t)}</b> · ${x.cm!=null?yuv(x.cm,1)+" cm":"–"}${x.ens!=null?` · ens %${x.ens}`:""}</span>`).join("")}</div>
+  </div></div>`;
+}
+
+/* ---------- kış sinyali (tarayıcıda desen analizi) ---------- */
+const KIS = {
+  sehirler: [["İstanbul",41.01,28.98],["İzmir",38.42,27.14],["Ankara",39.93,32.86],["Konya",37.87,32.48],["Samsun",41.29,36.33],["Erzurum",39.90,41.27],["Diyarbakır",37.91,40.24]],
+  blokBoylam: [10,20,30,40], blokEnlem: [77.5,62.5,47.5], cukurBoylam: [0,5,10,15,20,25,30,35,40,45,50,55,60],
+  akis: [[40,25],[40,40]], T850: -5, KAR_CM: 1, CUKUR_M: -40, AKIS_M: 20,
+  modeller: {GEFS: ["gfs05","gfs025","gfs_seamless"], "ECMWF ENS": ["ecmwf_ifs025","ecmwf_ifs04"]},
+  satirlar: [["soguk","Yaygın soğuk (≥3 şehir T850≤-5)"],["kar","Yaygın kar (≥2 şehir ≥1 cm)"],["sT","ŞEHİR: T850≤-5°C"],["sK","ŞEHİR: kar ≥1 cm"],
+             ["blok","İskandinav blokajı"],["cukur","Çukur Balkan-Karadeniz-TR"],["akis","Kuzeyli akış (TR üstü)"]]
+};
+const RISK = [[50,"YÜKSEK","var(--kirmizi)"],[30,"ORTA","var(--turuncu)"],[15,"DÜŞÜK","var(--mavi)"],[0,"ÇOK DÜŞÜK","#94a3b8"]];
+const risk = v => RISK.find(r => v >= r[0]);
+let kisSonuc = null, kisCalisiyor = false, kisGorunur = false;
+
+async function ensNokta(adaylar, noktalar, degiskenler, anahtar){
+  const p = {latitude: noktalar.map(n=>n[0]).join(","), longitude: noktalar.map(n=>n[1]).join(","),
+             hourly: degiskenler.join(","), forecast_days: 15, timezone: "auto"};
+  let hata;
+  for(const coz of ["hourly_6", null]){   // önce 6 saatlik (daha az veri), olmazsa saatlik
+    const q = {...p}; if(coz) q.temporal_resolution = coz;
+    try{ const {json} = await modelIstek(ENS_URL, anahtar + (coz||""), adaylar, q, degiskenler[0]); return Array.isArray(json) ? json : [json]; }
+    catch(e){ hata = e; }
+  }
+  throw hata;
+}
+function gunlukUye(loc, v, f){
+  const h = loc.hourly, anah = Object.keys(h).filter(k => k===v || k.startsWith(v+"_member")), gi = new Map();
+  h.time.forEach((t,i) => { const g = t.slice(0,10); if(!gi.has(g)) gi.set(g, []); gi.get(g).push(i); });
+  const M = {};
+  for(const [g, idx] of gi) M[g] = anah.map(k => { const d = idx.map(i => h[k][i]).filter(x => x != null);
+    if(!d.length) return null; return f==="min" ? Math.min(...d) : f==="sum" ? d.reduce((a,b)=>a+b,0) : d.reduce((a,b)=>a+b,0)/d.length; });
+  return M;
+}
+async function kisModel(ad, adaylar){
+  const zn = [];
+  KIS.blokBoylam.forEach(lon => KIS.blokEnlem.forEach(lat => zn.push([lat, lon])));
+  KIS.cukurBoylam.forEach(lon => zn.push([42, lon])); KIS.akis.forEach(n => zn.push(n));
+  const sn = [...KIS.sehirler.map(s => [s[1], s[2]]), [yer.lat, yer.lon]];
+  const [zl, tl] = await Promise.all([ensNokta(adaylar, zn, ["geopotential_height_500hPa"], "kz_"+ad),
+                                      ensNokta(adaylar, sn, ["temperature_850hPa","snowfall"], "kt_"+ad)]);
+  const Z = zl.map(l => gunlukUye(l, "geopotential_height_500hPa", "mean"));
+  const T = tl.map(l => gunlukUye(l, "temperature_850hPa", "min")), S = tl.map(l => gunlukUye(l, "snowfall", "sum"));
+  const nb = KIS.blokBoylam.length*3, nc = KIS.cukurBoylam.length, x = KIS.cukurBoylam, xo = x.reduce((a,b)=>a+b,0)/x.length;
+  const sonuc = {}; let uye = 0;
+  for(const g of Object.keys(Z[0])){
+    const nu = Z[0][g].length; uye = Math.max(uye, nu);
+    const say = {blok:0, cukur:0, akis:0, soguk:0, kar:0, sT:0, sK:0}, gecerli = {z:0, t:0};
+    for(let u=0; u<nu; u++){
+      const z = Z.map(m => m[g]?.[u]);
+      if(z.every(v => v != null)){
+        gecerli.z++;
+        let b = 0;
+        for(let k=0; k<KIS.blokBoylam.length; k++){ const [zN, z0, zS] = [z[3*k], z[3*k+1], z[3*k+2]];
+          if((z0-zS)/15 > 0 && (zN-z0)/15 < -10) b++; }
+        if(b >= 2) say.blok++;
+        const y = z.slice(nb, nb+nc), yo = y.reduce((a,c)=>a+c,0)/nc;
+        const egim = x.reduce((a,xi,i)=>a+(xi-xo)*(y[i]-yo),0) / x.reduce((a,xi)=>a+(xi-xo)**2,0);
+        const sap = y.map((yi,i) => yi - (yo + egim*(x[i]-xo))), m = Math.min(...sap), eks = x[sap.indexOf(m)];
+        if(eks >= 25 && eks <= 45 && m < KIS.CUKUR_M) say.cukur++;
+        if(z[nb+nc] - z[nb+nc+1] > KIS.AKIS_M) say.akis++;
+      }
+      const t = T.map(m => m[g]?.[u]), s = S.map(m => m[g]?.[u]);
+      if(t.every(v => v != null)){
+        gecerli.t++;
+        const n = KIS.sehirler.length;
+        if(t.slice(0,n).filter(v => v <= KIS.T850).length >= 3) say.soguk++;
+        if(s.slice(0,n).filter(v => (v||0) >= KIS.KAR_CM).length >= 2) say.kar++;
+        if(t[n] <= KIS.T850) say.sT++;
+        if((s[n]||0) >= KIS.KAR_CM) say.sK++;
+      }
+    }
+    const yz = (k, n) => n ? say[k]/n*100 : null;
+    sonuc[g] = {blok:yz("blok",gecerli.z), cukur:yz("cukur",gecerli.z), akis:yz("akis",gecerli.z),
+                soguk:yz("soguk",gecerli.t), kar:yz("kar",gecerli.t), sT:yz("sT",gecerli.t), sK:yz("sK",gecerli.t)};
+  }
+  return {gun: sonuc, uye};
+}
+function kisYenile(){ kisSonuc = null; if(kisGorunur) kisHesapla(); else $("kdonem").innerHTML = '<div class="kart durumyok">Bu bölüm ekrana gelince hesaplanır…</div>'; }
+async function kisHesapla(){
+  if(kisCalisiyor || kisSonuc) return;
+  const anahtar = `kis_${yer.lat}_${yer.lon}`, eski = ls.get(anahtar, null);
+  if(eski && Date.now() - eski.zaman < 60*60*1000){ kisSonuc = eski; kisCiz(); return; }
+  kisCalisiyor = true;
+  $("kdonem").innerHTML = '<div class="kart durumyok">GEFS ve ECMWF ENS üyeleri indiriliyor ve analiz ediliyor… (10-30 sn)</div>';
+  const yerAnahtar = anahtar;
+  const r = await Promise.allSettled(Object.entries(KIS.modeller).map(([ad, a]) => kisModel(ad, a).then(v => [ad, v])));
+  kisCalisiyor = false;
+  if(yerAnahtar !== `kis_${yer.lat}_${yer.lon}`) return kisYenile();     // bu sırada şehir değişti
+  const modeller = {}, eksik = [];
+  r.forEach((x,i) => x.status === "fulfilled" ? (modeller[x.value[0]] = x.value[1]) : eksik.push(Object.keys(KIS.modeller)[i]));
+  if(!Object.keys(modeller).length){ $("kdonem").innerHTML = `<div class="kart durumyok">Kış sinyali hesaplanamadı (${esc(r[0].reason?.message||"bağlantı")}). Daha sonra yenile.</div>`; return; }
+  kisSonuc = {zaman: Date.now(), modeller, eksik};
+  ls.set(anahtar, kisSonuc);
+  kisCiz();
+}
+function kisCiz(){
+  const {modeller, eksik, zaman} = kisSonuc, adlar = Object.keys(modeller);
+  const bugun = new Date(); bugun.setHours(12,0,0,0);
+  const tarih = n => { const d = new Date(bugun); d.setDate(d.getDate()+n); return d.toLocaleDateString("sv-SE"); };
+  const gunler = [...new Set(adlar.flatMap(a => Object.keys(modeller[a].gun)))].sort().filter(g => g >= tarih(0));
+  const ort = (g, k) => { const v = adlar.map(a => modeller[a].gun[g]?.[k]).filter(x => x != null); return v.length ? v.reduce((a,b)=>a+b,0)/v.length : null; };
+  const donemler = [["Yakın",1,5],["Orta",6,10],["Uzak",11,15]].map(([ad,a,b]) => {
+    const gg = gunler.filter(g => g >= tarih(a) && g <= tarih(b));
+    const maks = (k, m) => { const v = gg.map(g => m ? modeller[m].gun[g]?.[k] : ort(g,k)).filter(x => x != null); return v.length ? Math.max(...v) : null; };
+    return {ad, aralik: gg.length ? `${gunKisa(gg[0])} – ${gunKisa(gg[gg.length-1])}` : "veri yok", gg, maks};
+  });
+  $("kdonem").innerHTML = donemler.map(d => {
+    const s = d.maks("soguk"), rs = s==null ? null : risk(s), sT = d.maks("sT"), rt = sT==null ? null : risk(sT);
+    const satir = (et, v, r) => `<div class="satir"><span>${et}</span>${v==null ? "–" : `<span><b>%${yuv(v)}</b> ${r ? `<span class="rozet" style="background:${r[2]}">${r[1]}</span>` : ""}</span>`}</div>`;
+    return `<div class="kart donem"><h3>${d.ad} dönem</h3><div class="t">${d.aralik} · en yüksek üye oranı</div>
+      ${satir("Yaygın soğuk", s, rs)}${satir(esc(yer.ad)+": T850≤-5°C", sT, rt)}
+      ${satir("Yaygın kar", d.maks("kar"))}${satir("İskandinav blokajı", d.maks("blok"))}${satir("Çukur TR hattında", d.maks("cukur"))}
+      <div class="t" style="margin-top:8px">Yaygın soğuk: ${adlar.map(a => `${a} %${yuv(d.maks("soguk",a))}`).join(" · ")}</div></div>`; }).join("");
+  const renk = v => v==null ? "transparent" : `rgba(43,123,208,${(0.08 + v/100*0.85).toFixed(2)})`;
+  $("kisi").innerHTML = `<thead><tr><th>Gösterge (iki model ort., % üye)</th>${gunler.map(g => `<th>${gunKisa(g).replace(" ","<br>")}</th>`).join("")}</tr></thead><tbody>` +
+    KIS.satirlar.map(([k, et]) => `<tr><td>${et.replace("ŞEHİR", esc(yer.ad))}</td>${gunler.map(g => { const v = ort(g,k);
+      return `<td style="background:${renk(v)};color:${v!=null&&v>55?"#fff":"inherit"}">${v==null?"–":Math.round(v)}</td>`; }).join("")}</tr>`).join("") + "</tbody>";
+  $("kisdurum").innerHTML = `${adlar.map(a => `${a} (${modeller[a].uye} üye)`).join(" · ")}${eksik.length ? ` · alınamayan: ${eksik.join(", ")}` : ""} · hesaplandı ${new Date(zaman).toLocaleTimeString("tr-TR",{hour:"2-digit",minute:"2-digit"})} (1 saat önbellek).
+    Yaygın göstergeler 7 temsilci şehirden: İstanbul, İzmir, Ankara, Konya, Samsun, Erzurum, Diyarbakır. AO/NAO ve istatistiksel model için Colab'daki Kış İzleme Panosu.`;
+}
+const gunKisa = g => { const d = new Date(g+"T12:00"); return `${d.getDate()}.${String(d.getMonth()+1).padStart(2,"0")} ${GUNK[d.getDay()]}`; };
+new IntersectionObserver(e => { kisGorunur = e[0].isIntersecting; if(kisGorunur && veri) kisHesapla(); }, {rootMargin: "300px"}).observe($("kis"));
+
+/* ---------- model seçici ---------- */
+$("model").innerHTML = Object.entries(MODELLER).map(([k,m]) => `<option value="${k}"${k===model?" selected":""}>${esc(m.ad)}</option>`).join("");
+$("model").onchange = e => { model = e.target.value; ls.set("hava_model", model); yukle(); };
+
+/* ---------- arama ---------- */
+let aramaZaman;
+async function ara(metin){
+  const r = await fetch("https://geocoding-api.open-meteo.com/v1/search?" + new URLSearchParams({name:metin, count:8, language:"tr", format:"json"}));
+  const j = await r.json(); return j.results || [];
+}
+function oneriGoster(liste){
+  const kutu = $("oneri");
+  if(!liste.length){ kutu.style.display = "none"; return; }
+  kutu.innerHTML = liste.map((y,k) => `<button type="button" data-k="${k}">${esc(y.name)} <small>${esc([y.admin2,y.admin1,y.country].filter(Boolean).join(", "))}</small></button>`).join("");
+  kutu.style.display = "block";
+  kutu.querySelectorAll("button").forEach(b => b.onclick = () => sec(liste[+b.dataset.k]));
+}
+function sec(y){
+  yer = {ad:y.name, ek:[y.admin1,y.country].filter(Boolean).join(", "), lat:y.latitude, lon:y.longitude};
+  ls.set("hava_yer", yer);
+  const f = ls.get("hava_fav", []).filter(x => x.ad !== yer.ad); f.unshift(yer); ls.set("hava_fav", f.slice(0,6));
+  $("oneri").style.display = "none"; $("q").value = ""; history.replaceState(null, "", "#" + encodeURIComponent(yer.ad));
+  yukle();
+}
+$("q").addEventListener("input", e => { clearTimeout(aramaZaman); const m = e.target.value.trim();
+  if(m.length<2){ $("oneri").style.display="none"; return; }
+  aramaZaman = setTimeout(async () => { try{ oneriGoster(await ara(m)); }catch(_){} }, 300); });
+$("form").addEventListener("submit", async e => { e.preventDefault(); const m = $("q").value.trim(); if(!m) return;
+  try{ const l = await ara(m); if(l.length) sec(l[0]); else { $("oneri").innerHTML = '<button type="button" disabled>Sonuç bulunamadı</button>'; $("oneri").style.display="block"; } }catch(_){} });
+document.addEventListener("click", e => { if(!e.target.closest(".ara")) $("oneri").style.display = "none"; });
+$("yenile").onclick = yukle;
+$("konum").onclick = () => {
+  if(!navigator.geolocation) return;
+  navigator.geolocation.getCurrentPosition(async p => {
+    yer = {ad:"Konumum", ek:"", lat:+p.coords.latitude.toFixed(4), lon:+p.coords.longitude.toFixed(4)};
+    ls.set("hava_yer", yer); yukle();
+  }, () => { $("zaman").textContent = "Konum izni verilmedi; şehir adıyla arayabilirsin."; }, {timeout:10000});
+};
+function favCiz(){
+  const f = ls.get("hava_fav", []);
+  $("favs").innerHTML = f.map((y,k) => `<button class="fav${y.ad===yer.ad?" aktif":""}" data-k="${k}">${esc(y.ad)}</button>`).join("");
+  $("favs").querySelectorAll(".fav").forEach(b => b.onclick = () => { yer = f[+b.dataset.k]; ls.set("hava_yer", yer); yukle(); });
+}
+
+/* ---------- başlangıç ve otomatik yenileme ---------- */
+(async () => {
+  const h = decodeURIComponent(location.hash.slice(1) || "");
+  if(h && h !== yer.ad){ try{ const l = await ara(h); if(l.length){ sec(l[0]); return; } }catch(_){} }
+  yukle();
+})();
+setInterval(() => { if(document.visibilityState === "visible") yukle(); }, 10*60*1000);
+document.addEventListener("visibilitychange", () => { if(document.visibilityState === "visible" && Date.now()-sonGuncelleme > 5*60*1000) yukle(); });
+}
+</script>
+</body>
+</html>
