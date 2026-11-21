@@ -196,7 +196,7 @@ footer a{color:inherit}
 </main>
 <footer>
   Veri: <a href="https://open-meteo.com/" rel="noopener">Open-Meteo</a> (ECMWF, DWD ICON, NOAA GFS vb. modellerin en uygun birleşimi). Sayfa her açılışta ve açık kaldıkça 10 dakikada bir güncellenir.
-  Radar: <a href="https://www.rainviewer.com/" rel="noopener">Weather data by RainViewer</a> (kişisel kullanım). Harita: © OpenStreetMap katkıcıları, © CARTO.
+  Radar: <a href="https://www.rainviewer.com/" rel="noopener">Weather data by RainViewer</a> (kişisel kullanım). Harita: © OpenStreetMap katkıcıları.
   Uyarılar model verisinden otomatik üretilir, resmî değildir; resmî uyarılar için <a href="https://www.mgm.gov.tr/" rel="noopener">Meteoroloji Genel Müdürlüğü</a>.
 </footer>
 
@@ -943,8 +943,8 @@ async function radarKur(){
       $("radar").innerHTML = "";
       radar.harita = L.map("radar", {zoomControl:true, minZoom:4, maxZoom:10, attributionControl:true}).setView([yer.lat, yer.lon], 7);
       radar.harita.attributionControl.setPrefix(false);
-      L.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png", {subdomains:"abcd", maxZoom:10,
-        attribution:'© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> © <a href="https://carto.com/attributions">CARTO</a>'}).addTo(radar.harita);
+      L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {maxZoom:10,
+        attribution:'© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> katkıcıları'}).addTo(radar.harita);
       radar.merkez = yer.lat + "," + yer.lon;
     }
     const m = yer.lat + "," + yer.lon;
