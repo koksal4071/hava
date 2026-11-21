@@ -154,7 +154,7 @@ footer a{color:inherit}
     <div class="efs" id="kdurum">Karşılaştırma yükleniyor…</div></div>
   <div class="kart" style="padding:6px 10px;margin-top:12px"><div class="scroll"><table class="ktab" id="ktab"></table></div></div>
 
-  <h2 id="dog">Doğrulama <small>son 7 günde hangi model daha iyi tuttu?</small></h2>
+  <h2 id="dog">Doğrulama <small>geçmiş günlerde hangi model daha iyi tuttu?</small></h2>
   <div class="segment" id="dogref"></div>
   <div id="dogozet"><div class="kart durumyok">Bu bölüm ekrana gelince hesaplanır…</div></div>
   <div class="kart" style="margin-top:12px"><div class="fig" id="dfig" style="height:240px"><svg id="dgrafik"></svg></div><div class="efs" id="defs"></div></div>
@@ -632,28 +632,29 @@ const REFLER = {
   ort:  {ad:"Model ortalaması", acik:"4 modelin kendi kısa vadeli analizlerinin ortalaması. Tek bir modeli kayırmaz, ama modellerin ortak hataları görünmez."},
   oto:  {ad:"Otomatik", acik:"Open-Meteo'nun 'en uygun' harmanı. En güncel, ama Türkiye ve Avrupa'da ağırlıklı olarak ICON'a dayandığı için ICON'u kayırabilir."}};
 let dogRef = ls.get("hava_dogref", "era5"); if(!REFLER[dogRef]) dogRef = "era5";
+let dogPen = ls.get("hava_dogpen", 30); if(![7,30].includes(dogPen)) dogPen = 30;
 let dogSonuc = null, dogCalisiyor = false, dogGorunur = false;
 async function jsonAl(url, p){ const r = await fetch(url + "?" + new URLSearchParams(p)); if(!r.ok) throw new Error("HTTP " + r.status); return r.json(); }
 async function dogModel(k){
   const v = [0,1,2,3].flatMap(d => [`temperature_2m_previous_day${d}`, `precipitation_previous_day${d}`]);
-  const p = {latitude:yer.lat, longitude:yer.lon, timezone:"auto", past_days:14, forecast_days:1, hourly:v.join(",")};
+  const p = {latitude:yer.lat, longitude:yer.lon, timezone:"auto", past_days:35, forecast_days:1, hourly:v.join(",")};
   return (await modelIstek(PR_URL, "pr_"+k, MODELLER[k].aday, p, "temperature_2m_previous_day1")).json.hourly;
 }
 async function analizAl(k){
-  const p = {latitude:yer.lat, longitude:yer.lon, timezone:"auto", past_days:14, forecast_days:1, hourly:"temperature_2m,precipitation"};
+  const p = {latitude:yer.lat, longitude:yer.lon, timezone:"auto", past_days:35, forecast_days:1, hourly:"temperature_2m,precipitation"};
   return (await modelIstek(FC, "an_"+k, MODELLER[k].aday, p)).json.hourly;
 }
 async function era5Al(){
   const f = n => { const d = new Date(); d.setDate(d.getDate()+n); return d.toLocaleDateString("sv-SE"); };
-  const p = {latitude:yer.lat, longitude:yer.lon, timezone:"auto", start_date:f(-15), end_date:f(-1), hourly:"temperature_2m,precipitation"};
+  const p = {latitude:yer.lat, longitude:yer.lon, timezone:"auto", start_date:f(-41), end_date:f(-1), hourly:"temperature_2m,precipitation"};
   // Yalnızca saf ERA5: varsayılan harman IFS HRES içerdiği için kullanılmaz
   return (await modelIstek(AR_URL, "era5", ["era5", "era5_seamless"], p)).json.hourly;
 }
 function dogYenile(){ dogSonuc = null; if(dogGorunur) dogHesapla(); else $("dogozet").innerHTML = '<div class="kart durumyok">Bu bölüm ekrana gelince hesaplanır…</div>'; }
 
-function degerlendir(H, ks, t, RT, RP){
-  // referansın dolu olduğu son 7 gün (168 saat)
-  const E = t.map((_,i) => i).filter(i => RT[i] != null).slice(-168);
+function degerlendir(H, ks, t, RT, RP, gun){
+  // referansın dolu olduğu son "gun" gün
+  const E = t.map((_,i) => i).filter(i => RT[i] != null).slice(-gun*24);
   const al = (k, ad, i) => { const h = H[k], j = h.time.indexOf(t[i]); return j < 0 ? null : (h[ad]?.[j] ?? null); };
   const gunler = [...new Set(E.map(i => t[i].slice(0,10)))].filter(g => E.filter(i => t[i].startsWith(g)).length >= 20);
   const model = {};
@@ -668,25 +669,30 @@ function degerlendir(H, ks, t, RT, RP){
       if(mt.length){ n++; if((mp >= 1) === (rp >= 1)) hit++; }
       m.gun[g] = {mx: mt.length ? Math.max(...mt) : null, mn: mt.length ? Math.min(...mt) : null, mp, rx: Math.max(...rt), rn: Math.min(...rt), rp}; });
     m.isabet = n ? hit/n*100 : null;
+    const fx = [], fn = [];
+    Object.values(m.gun).forEach(d => { if(d.mx != null){ fx.push(d.mx - d.rx); fn.push(d.mn - d.rn); } });
+    m.mxHata = fx.length >= 3 ? ortala(fx.map(Math.abs)) : null; m.mxBias = fx.length >= 3 ? ortala(fx) : null;
+    m.mnHata = fn.length >= 3 ? ortala(fn.map(Math.abs)) : null; m.mnBias = fn.length >= 3 ? ortala(fn) : null;
+    m.seri = m.seri.map(v => v == null ? null : Math.round(v*10)/10);
     model[k] = m;
   }
-  return {t: E.map(i => t[i]), refT: E.map(i => RT[i]), gunler, model};
+  return {t: E.map(i => t[i]), refT: E.map(i => RT[i] == null ? null : Math.round(RT[i]*10)/10), gunler, model};
 }
 
 async function dogHesapla(){
   if(dogCalisiyor || dogSonuc) return;
-  const an = `dog3_${yer.lat}_${yer.lon}`, eski = ls.get(an, null);
-  const gecerli = x => x && x.ref && Object.values(x.ref).some(r => r && Object.values(r.model || {}).some(m => m.mae?.[0] != null));
+  const an = `dog4_${yer.lat}_${yer.lon}`, eski = ls.get(an, null);
+  const gecerli = x => x && x.ref && Object.values(x.ref).some(r => r && r[7] && Object.values(r[7].model || {}).some(m => m.mae?.[0] != null));
   if(gecerli(eski) && Date.now() - eski.zaman < 3*3600*1000){ dogSonuc = eski; dogCiz(); return; }
   dogCalisiyor = true;
   $("dogozet").innerHTML = '<div class="kart durumyok">Geçmiş tahminler ve referans verileri indiriliyor…</div>';
   const [r, oto, era, ans] = await Promise.all([
     Promise.allSettled(KARSILASTIR.map(k => dogModel(k).then(h => [k, h]))),
-    jsonAl(FC, {latitude:yer.lat, longitude:yer.lon, timezone:"auto", past_days:14, forecast_days:1, hourly:"temperature_2m,precipitation"}).then(j => j.hourly).catch(() => null),
+    jsonAl(FC, {latitude:yer.lat, longitude:yer.lon, timezone:"auto", past_days:35, forecast_days:1, hourly:"temperature_2m,precipitation"}).then(j => j.hourly).catch(() => null),
     era5Al().catch(() => null),
     Promise.allSettled(KARSILASTIR.map(k => analizAl(k).then(h => [k, h])))]);
   dogCalisiyor = false;
-  if(an !== `dog3_${yer.lat}_${yer.lon}`) return dogYenile();
+  if(an !== `dog4_${yer.lat}_${yer.lon}`) return dogYenile();
   const H = {}, A = {};
   r.forEach(x => { if(x.status === "fulfilled") H[x.value[0]] = x.value[1]; });
   ans.forEach(x => { if(x.status === "fulfilled") A[x.value[0]] = x.value[1]; });
@@ -702,7 +708,7 @@ async function dogHesapla(){
   for(const [rk, [RT, RP]] of Object.entries(kaynak)){
     const dolu = RT.filter(v => v != null).length;
     sonuc.teshis.push(`${REFLER[rk].ad}: ${dolu} saat referans`);
-    sonuc.ref[rk] = dolu >= 48 ? degerlendir(H, ks, t, RT, RP) : null;
+    sonuc.ref[rk] = dolu >= 48 ? {7: degerlendir(H, ks, t, RT, RP, 7), 30: degerlendir(H, ks, t, RT, RP, 30)} : null;
   }
   sonuc.teshis.push(...ks.map(k => { const h = H[k], d = ad => (h[ad]||[]).filter(v => v != null).length;
     return `${MODELLER[k].ad}: ${h.time.length} saat, day1 ${d("temperature_2m_previous_day1")} dolu`; }));
@@ -711,12 +717,14 @@ async function dogHesapla(){
 
 function dogCiz(){
   const ad = k => esc(MODELLER[k].ad.replace(" (yapay zekâ)",""));
-  const lider = rk => { const R = dogSonuc.ref[rk]; if(!R) return null; const ks = Object.keys(R.model).filter(k => R.model[k].mae[0] != null);
+  const lider = rk => { const R = dogSonuc.ref[rk]?.[dogPen]; if(!R) return null; const ks = Object.keys(R.model).filter(k => R.model[k].mae[0] != null);
     return ks.length ? ks.sort((a,b) => R.model[a].mae[0] - R.model[b].mae[0])[0] : null; };
   $("dogref").innerHTML = `<span class="t">Gerçekleşen değer kaynağı:</span>` + Object.entries(REFLER).map(([rk, r]) =>
     `<button class="seg${rk === dogRef ? " aktif" : ""}" data-r="${rk}" ${dogSonuc.ref[rk] ? "" : "disabled title='veri alınamadı'"}>${r.ad}${lider(rk) ? ` · 1. ${ad(lider(rk))}` : ""}</button>`).join("");
-  $("dogref").querySelectorAll("button").forEach(b => b.onclick = () => { dogRef = b.dataset.r; ls.set("hava_dogref", dogRef); dogCiz(); });
-  const R = dogSonuc.ref[dogRef];
+  $("dogref").innerHTML += `<span style="flex-basis:100%;height:0"></span><span class="t">Dönem:</span>` + [7,30].map(g => `<button class="seg${g === dogPen ? " aktif" : ""}" data-g="${g}">${g} gün</button>`).join("");
+  $("dogref").querySelectorAll("button[data-r]").forEach(b => b.onclick = () => { dogRef = b.dataset.r; ls.set("hava_dogref", dogRef); dogCiz(); });
+  $("dogref").querySelectorAll("button[data-g]").forEach(b => b.onclick = () => { dogPen = +b.dataset.g; ls.set("hava_dogpen", dogPen); dogCiz(); });
+  const R = dogSonuc.ref[dogRef]?.[dogPen];
   const ks = R ? Object.keys(R.model).filter(k => R.model[k].mae[0] != null) : [];
   if(!ks.length){
     $("dogozet").innerHTML = `<div class="kart durumyok">${esc(REFLER[dogRef].ad)} referansı için yeterli veri yok. Başka bir kaynak seç.<br><small style="display:block;text-align:left;margin-top:10px;line-height:1.6">Teşhis:<br>${(dogSonuc.teshis||[]).map(esc).join("<br>")}</small></div>`;
@@ -734,28 +742,30 @@ function dogCiz(){
     <div class="alt">Sıralama: ${sira.map((k,i) => `${i+1}. ${ad(k)} (${yuv(M[k].mae[0],1)}°)`).join(" · ")}</div>
     <div class="alt" style="margin-top:4px">${tutarlilik}</div></div></div>
     <div class="kart" style="padding:6px 10px;margin-top:12px"><div class="scroll"><table class="ktab dtab"><thead><tr><th>Model</th>
-      <th class="n">1 gün önce</th><th class="n">2 gün önce</th><th class="n">3 gün önce</th><th class="n">Eğilim</th><th class="n">Yağış var/yok isabeti</th></tr></thead><tbody>
+      <th class="n">1 gün önce</th><th class="n">2 gün önce</th><th class="n">3 gün önce</th><th class="n">Gündüz (en yüksek)</th><th class="n">Gece (en düşük)</th><th class="n">Eğilim</th><th class="n">Yağış var/yok isabeti</th></tr></thead><tbody>
       ${sira.map(k => `<tr><td><span class="nokta" style="background:${MODELLER[k].renk}"></span>${ad(k)}</td>
         ${[0,1,2].map(L => `<td class="n ${M[k].mae[L] != null && M[k].mae[L] === enIyi(L) ? "iyi" : ""}">${M[k].mae[L] == null ? "–" : yuv(M[k].mae[L],1)+"°"}</td>`).join("")}
+        ${[["mxHata","mxBias"],["mnHata","mnBias"]].map(([h,b]) => `<td class="n ${M[k][h] != null && M[k][h] === Math.min(...ks.map(x => M[x][h] ?? 99)) ? "iyi" : ""}">${M[k][h] == null ? "–" : yuv(M[k][h],1)+"°"}${M[k][b] != null ? `<br><small>${M[k][b] > 0 ? "+" : ""}${yuv(M[k][b],1)}°</small>` : ""}</td>`).join("")}
         <td class="n">${egilim(M[k].bias)}</td>
         <td class="n ${M[k].isabet === isabetMaks ? "iyi" : ""}">${M[k].isabet == null ? "–" : "%"+yuv(M[k].isabet)}</td></tr>`).join("")}
       </tbody></table></div></div>`;
   $("defs").innerHTML = `<span><i style="background:var(--ink)"></i>Gerçekleşen (${esc(REFLER[dogRef].ad)})</span>` + ks.map(k => `<span><i style="background:${MODELLER[k].renk}"></i>${ad(k)} (1 gün önceki tahmini)</span>`).join("");
   dgrafik();
   $("dtab").innerHTML = `<thead><tr><th>Gün</th><th class="n">Gerçekleşen</th>${ks.map(k => `<th class="n" style="color:${MODELLER[k].renk}">${ad(k)}</th>`).join("")}</tr></thead><tbody>` +
-    [...gunler].reverse().map(g => { const r = M[ks[0]].gun[g];
+    [...gunler].reverse().slice(0,10).map(g => { const r = M[ks[0]].gun[g];
       return `<tr><td class="gun"><b>${gunKisa(g)}</b></td><td class="n"><b>${yuv(r.rx)}°</b> / ${yuv(r.rn)}°<br><small>${yuv(r.rp,1)} mm</small></td>` +
         ks.map(k => { const d = M[k].gun[g]; if(!d || d.mx == null) return '<td class="n">–</td>';
           const f = Math.max(Math.abs(d.mx - r.rx), Math.abs(d.mn - r.rn)), sinif = f <= 1 ? "iyi" : f >= 3 ? "kotu" : "";
           return `<td class="n ${sinif}">${yuv(d.mx)}° / ${yuv(d.mn)}°<br><small>${yuv(d.mp,1)} mm</small></td>`; }).join("") + "</tr>"; }).join("") + "</tbody>";
   $("dognot").innerHTML = `<b>${esc(REFLER[dogRef].ad)}:</b> ${esc(REFLER[dogRef].acik)}<br>
+    Gündüz/Gece: 1 gün önceki tahminde günün en yüksek ve en düşük sıcaklığının ortalama hatası; altındaki küçük sayı yön (− soğuk, + sıcak tahmin). Günlük tablo son 10 günü gösterir.<br>
     Sapma: modelin 24/48/72 saat önceki saatlik sıcaklık tahmininin, gerçekleşen değerden ortalama mutlak farkı (küçük = iyi). Hiçbir kaynak istasyon ölçümü değildir; istasyon verisi için MGM.
-    7 günlük örnekte 0,2–0,3°C'lik farklar anlamlı sayılmamalı. Günlük tabloda yeşil: ±1°C içinde, kırmızı: 3°C ve üzeri.
+    ${dogPen === 7 ? "7 günlük örnekte 0,2–0,3°C'lik farklar anlamlı sayılmamalı." : "30 günlük örnek, 7 güne göre çok daha güvenilirdir."} Günlük tabloda yeşil: ±1°C içinde, kırmızı: 3°C ve üzeri.
     Hesaplandı ${new Date(dogSonuc.zaman).toLocaleTimeString("tr-TR",{hour:"2-digit",minute:"2-digit"})} (3 saat önbellek).`;
 }
 const dsvg = $("dgrafik");
 function dgrafik(){
-  const R = dogSonuc?.ref?.[dogRef]; if(!R) return;
+  const R = dogSonuc?.ref?.[dogRef]?.[dogPen]; if(!R) return;
   const {t, refT, model: M} = R, ks = Object.keys(M);
   const W = dsvg.clientWidth, H = dsvg.clientHeight, sl = 34, sg = 10, us = 12, al = 26, gw = W-sl-sg, gh = H-us-al;
   const hep = [...refT, ...ks.flatMap(k => M[k].seri)].filter(v => v != null);
