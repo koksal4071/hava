@@ -10,6 +10,9 @@ Ortam değişkenleri:
   NTFY_TOPIC  (zorunlu, GitHub Secret)  ntfy konu adı
   SITE_URL    (isteğe bağlı)            bildirime tıklayınca açılacak site
   TEST=true   (isteğe bağlı)            test bildirimi gönderir
+  UYARI_SEHIRLER (isteğe bağlı, GitHub Variable)  "Kırşehir, Ankara, Mucur"
+                 → doluysa uyari_ayar.json'daki şehir listesinin yerine geçer
+  UYARI_SEVIYE   (isteğe bağlı, GitHub Variable)  sari | turuncu | kirmizi
 """
 
 import json
@@ -131,6 +134,15 @@ def main():
     site = os.environ.get("SITE_URL", "").strip()
     with open(AYAR_DOSYA, encoding="utf-8") as f:
         ayar = json.load(f)
+    # Telefondan kolay düzenleme: GitHub Variable doluysa dosyadaki ayarı ezer
+    ortam_sehir = os.environ.get("UYARI_SEHIRLER", "").strip()
+    if ortam_sehir:
+        ayar["sehirler"] = [x.strip() for x in ortam_sehir.replace(";", ",").split(",") if x.strip()]
+    ortam_sev = os.environ.get("UYARI_SEVIYE", "").strip().lower().replace("ı", "i")
+    if ortam_sev in SEVIYE:
+        ayar["en_dusuk_seviye"] = ortam_sev
+    print("Şehirler:", ", ".join(s if isinstance(s, str) else s["ad"] for s in ayar["sehirler"]),
+          "| en düşük seviye:", ayar.get("en_dusuk_seviye", "turuncu"))
     esik = SEVIYE[ayar.get("en_dusuk_seviye", "turuncu")]
     tekrar = timedelta(hours=ayar.get("tekrar_saat", 6))
 
