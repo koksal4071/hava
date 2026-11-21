@@ -38,6 +38,8 @@ box-shadow:0 10px 30px rgba(0,0,0,.25);z-index:5;overflow:hidden;display:none}
 .modelsec{max-width:1100px;margin:10px auto 0;display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:14px}
 .modelsec select{height:40px;border-radius:10px;border:1px solid rgba(255,255,255,.35);background:rgba(255,255,255,.12);color:#fff;padding:0 10px;font-size:15px}
 .modelsec select option{color:#0e1b2b}.modelsec select:focus-visible{outline:3px solid var(--sari)}
+.duz{display:inline-flex;align-items:center;gap:6px;min-height:40px;padding:0 12px;border-radius:10px;border:1px solid rgba(255,255,255,.35);background:rgba(255,255,255,.12);cursor:pointer;font-size:14px}
+.duz input{width:18px;height:18px;accent-color:#f4b400}
 .mnot{opacity:.8;font-size:13px}
 .kar-ac{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px}
 .kar-ac label{display:inline-flex;align-items:center;gap:6px;font-size:14px;padding:6px 10px;border:1px solid var(--cizgi);border-radius:999px;cursor:pointer}
@@ -127,7 +129,7 @@ footer a{color:inherit}
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7"/></svg></button>
     <div class="oneri" id="oneri" role="listbox"></div>
   </form>
-  <div class="modelsec"><label for="model">Model:</label><select id="model"></select><span class="mnot" id="mnot"></span></div>
+  <div class="modelsec"><label for="model">Model:</label><select id="model"></select><label class="duz" title="Seçili modelin son 30 gündeki saatlik sapmasını tahminden çıkarır"><input type="checkbox" id="duzelt"> Yerel düzeltme</label><span class="mnot" id="mnot"></span></div>
   <div class="favs" id="favs"></div>
   <section class="anlik" id="anlik"><div class="durumyok" style="color:#fff">Yükleniyor…</div></section>
   <div class="zaman" id="zaman"></div>
@@ -260,7 +262,8 @@ async function modelIstek(url, anahtar, adaylar, params, kontrol="temperature_2m
 async function yukle(){
   $("zaman").textContent = "Güncelleniyor…";
   kveri = null; kisYenile(); dogYenile();
-  try { veri = await getir(); sonGuncelleme = Date.now(); ciz(); karsilastir(); }
+  try { veriHam = await getir(); veri = veriHam; sonGuncelleme = Date.now(); duzeltUygula(); ciz(); karsilastir();
+        if(duzeltAktif && KARSILASTIR.includes(model)) dogHesapla(); }
   catch(e){ $("zaman").textContent = "Veri alınamadı (" + e.message + "). İnternet bağlantını kontrol edip yenile."; }
 }
 
@@ -325,8 +328,8 @@ function ciz(){
       <div class="olc"><span>Yükseklik</span><b>${yuv(d.elevation)} m</b><span>${yuv(yer.lat,2)}°K ${yuv(yer.lon,2)}°D</span></div>
     </div>`;
   const z = new Date(sonGuncelleme);
-  $("mnot").textContent = model==="auto" ? "Open-Meteo bölgeye göre en iyi modelleri birleştirir" : `Tahmin: ${d._modelId}${d._yedek?" (saatlik veri otomatik)":""} · anlık değerler: otomatik`;
-  $("tablo-baslik").innerHTML = `10 günlük tahmin <small>${esc(MODELLER[model].ad)}</small>`;
+  $("mnot").textContent = (model==="auto" ? "Open-Meteo bölgeye göre en iyi modelleri birleştirir" : `Tahmin: ${d._modelId}${d._yedek?" (saatlik veri otomatik)":""} · anlık değerler: otomatik`) + duzeltNotu();
+  $("tablo-baslik").innerHTML = `10 günlük tahmin <small>${esc(MODELLER[model].ad)}${d._duzeltme ? " · yerel düzeltmeli" : ""}</small>`;
   $("zaman").innerHTML = `<span>Ölçüm zamanı (yerel): ${c.time.replace("T"," ")}</span><span>Sayfa güncellendi: ${z.toLocaleTimeString("tr-TR",{hour:"2-digit",minute:"2-digit"})}</span>`;
 
   $("uyarilar").innerHTML = u.map(([r,b,a]) => `<div class="uyari ${r}" role="alert"><i style="background:var(--${r})"></i><div><b>${esc(b)}</b><span>${esc(a)}</span></div></div>`).join("");
@@ -673,6 +676,18 @@ function degerlendir(H, ks, t, RT, RP, gun){
     Object.values(m.gun).forEach(d => { if(d.mx != null){ fx.push(d.mx - d.rx); fn.push(d.mn - d.rn); } });
     m.mxHata = fx.length >= 3 ? ortala(fx.map(Math.abs)) : null; m.mxBias = fx.length >= 3 ? ortala(fx) : null;
     m.mnHata = fn.length >= 3 ? ortala(fn.map(Math.abs)) : null; m.mnBias = fn.length >= 3 ? ortala(fn) : null;
+    if(gun >= 30){
+      const yumusat = a => a.map((_,h) => ortala([a[(h+23)%24], a[h], a[(h+1)%24]]));
+      const saatSapma = idx => { const b = Array.from({length:24}, () => []);
+        idx.forEach(i => { const v = al(k, "temperature_2m_previous_day1", i); if(v != null) b[+t[i].slice(11,13)].push(v - RT[i]); });
+        return yumusat(b.map(x => x.length >= 3 ? ortala(x) : null)); };
+      m.saatBias = saatSapma(E).map(v => v == null ? null : Math.round(v*100)/100);
+      // çapraz test: ilk yarıdan öğren, ikinci yarıda dene
+      const yari = Math.floor(E.length/2), B1 = saatSapma(E.slice(0, yari)), ham = [], duz = [];
+      E.slice(yari).forEach(i => { const v = al(k, "temperature_2m_previous_day1", i), b = B1[+t[i].slice(11,13)];
+        if(v != null && b != null){ ham.push(Math.abs(v - RT[i])); duz.push(Math.abs(v - b - RT[i])); } });
+      m.capraz = ham.length >= 48 ? {ham: ortala(ham), duz: ortala(duz)} : null;
+    }
     m.seri = m.seri.map(v => v == null ? null : Math.round(v*10)/10);
     model[k] = m;
   }
@@ -681,7 +696,7 @@ function degerlendir(H, ks, t, RT, RP, gun){
 
 async function dogHesapla(){
   if(dogCalisiyor || dogSonuc) return;
-  const an = `dog4_${yer.lat}_${yer.lon}`, eski = ls.get(an, null);
+  const an = `dog5_${yer.lat}_${yer.lon}`, eski = ls.get(an, null);
   const gecerli = x => x && x.ref && Object.values(x.ref).some(r => r && r[7] && Object.values(r[7].model || {}).some(m => m.mae?.[0] != null));
   if(gecerli(eski) && Date.now() - eski.zaman < 3*3600*1000){ dogSonuc = eski; dogCiz(); return; }
   dogCalisiyor = true;
@@ -692,7 +707,7 @@ async function dogHesapla(){
     era5Al().catch(() => null),
     Promise.allSettled(KARSILASTIR.map(k => analizAl(k).then(h => [k, h])))]);
   dogCalisiyor = false;
-  if(an !== `dog4_${yer.lat}_${yer.lon}`) return dogYenile();
+  if(an !== `dog5_${yer.lat}_${yer.lon}`) return dogYenile();
   const H = {}, A = {};
   r.forEach(x => { if(x.status === "fulfilled") H[x.value[0]] = x.value[1]; });
   ans.forEach(x => { if(x.status === "fulfilled") A[x.value[0]] = x.value[1]; });
@@ -740,7 +755,9 @@ function dogCiz(){
     <div class="alt">${donem} arasında ${esc(yer.ad)} için en iyi tahmin eden (${esc(REFLER[dogRef].ad)} referansıyla)</div>
     <div class="buyuk">${ad(en)} — 1 gün önceden ortalama ${yuv(M[en].mae[0],1)}°C sapma</div>
     <div class="alt">Sıralama: ${sira.map((k,i) => `${i+1}. ${ad(k)} (${yuv(M[k].mae[0],1)}°)`).join(" · ")}</div>
-    <div class="alt" style="margin-top:4px">${tutarlilik}</div></div></div>
+    <div class="alt" style="margin-top:4px">${tutarlilik}</div>
+    ${dogPen === 30 && ks.some(k => M[k].capraz) ? `<div class="alt" style="margin-top:4px"><b>Yerel düzeltme testi</b> (ilk 15 günden öğrenip son 15 günde denendi): ${sira.filter(k => M[k].capraz).map(k => {
+      const c = M[k].capraz, iyi = c.duz < c.ham - 0.05; return `${ad(k)} ${yuv(c.ham,1)}° → <b style="color:${iyi ? "var(--yesil)" : "var(--soluk)"}">${yuv(c.duz,1)}°</b>`; }).join(" · ")}</div>` : ""}</div></div>
     <div class="kart" style="padding:6px 10px;margin-top:12px"><div class="scroll"><table class="ktab dtab"><thead><tr><th>Model</th>
       <th class="n">1 gün önce</th><th class="n">2 gün önce</th><th class="n">3 gün önce</th><th class="n">Gündüz (en yüksek)</th><th class="n">Gece (en düşük)</th><th class="n">Eğilim</th><th class="n">Yağış var/yok isabeti</th></tr></thead><tbody>
       ${sira.map(k => `<tr><td><span class="nokta" style="background:${MODELLER[k].renk}"></span>${ad(k)}</td>
@@ -762,6 +779,7 @@ function dogCiz(){
     Sapma: modelin 24/48/72 saat önceki saatlik sıcaklık tahmininin, gerçekleşen değerden ortalama mutlak farkı (küçük = iyi). Hiçbir kaynak istasyon ölçümü değildir; istasyon verisi için MGM.
     ${dogPen === 7 ? "7 günlük örnekte 0,2–0,3°C'lik farklar anlamlı sayılmamalı." : "30 günlük örnek, 7 güne göre çok daha güvenilirdir."} Günlük tabloda yeşil: ±1°C içinde, kırmızı: 3°C ve üzeri.
     Hesaplandı ${new Date(dogSonuc.zaman).toLocaleTimeString("tr-TR",{hour:"2-digit",minute:"2-digit"})} (3 saat önbellek).`;
+  if(duzeltAktif && veriHam && !veri._duzeltme && duzeltBilgi()?.m){ duzeltUygula(); ciz(); }
 }
 const dsvg = $("dgrafik");
 function dgrafik(){
@@ -787,6 +805,44 @@ function dgrafik(){
 }
 new ResizeObserver(dgrafik).observe($("dfig"));
 new IntersectionObserver(e => { dogGorunur = e[0].isIntersecting; if(dogGorunur && veri) dogHesapla(); }, {rootMargin: "300px"}).observe($("dog"));
+
+
+/* ---------- yerel düzeltme ---------- */
+let duzeltAktif = ls.get("hava_duzelt", false), veriHam = null;
+function duzeltBilgi(){
+  if(!duzeltAktif || !veriHam) return null;
+  if(!KARSILASTIR.includes(model)) return {yok: true};
+  const rk = dogSonuc?.ref?.ort?.[30] ? "ort" : dogSonuc?.ref?.oto?.[30] ? "oto" : null;
+  const m = rk ? dogSonuc.ref[rk][30].model[model] : null;
+  if(!m || !m.saatBias || m.saatBias.every(v => v == null)) return {bekle: true};
+  return {m, ref: REFLER[rk].ad};
+}
+function duzeltUygula(){
+  veri = veriHam;
+  const b = duzeltBilgi(); if(!b || !b.m) return;
+  const v = structuredClone(veriHam), sb = b.m.saatBias;
+  v.hourly.temperature_2m = v.hourly.temperature_2m.map((x,i) => x == null ? null : Math.round((x - (sb[+v.hourly.time[i].slice(11,13)] || 0))*10)/10);
+  v.daily.temperature_2m_max = v.daily.temperature_2m_max.map(x => x == null ? null : x - (b.m.mxBias || 0));
+  v.daily.temperature_2m_min = v.daily.temperature_2m_min.map(x => x == null ? null : x - (b.m.mnBias || 0));
+  v._duzeltme = b; v._modelId = veriHam._modelId; v._yedek = veriHam._yedek;
+  veri = v;
+}
+function duzeltNotu(){
+  if(!duzeltAktif) return "";
+  const b = duzeltBilgi();
+  if(!b) return "";
+  if(b.yok) return " · yerel düzeltme yalnızca ECMWF IFS, AIFS, GFS ve ICON için";
+  if(b.bekle) return " · yerel düzeltme: doğrulama verisi hazırlanıyor…";
+  const f = x => x == null ? "–" : (x > 0 ? "+" : "") + yuv(x,1) + "°";
+  return ` · yerel düzeltme açık (${b.ref}, 30 gün): gündüz ${f(-(b.m.mxBias||0))}, gece ${f(-(b.m.mnBias||0))}`;
+}
+$("duzelt").checked = duzeltAktif;
+$("duzelt").onchange = e => {
+  duzeltAktif = e.target.checked; ls.set("hava_duzelt", duzeltAktif);
+  if(!veriHam) return;
+  if(duzeltAktif && KARSILASTIR.includes(model)) dogHesapla();
+  duzeltUygula(); ciz();
+};
 
 /* ---------- model seçici ---------- */
 $("model").innerHTML = Object.entries(MODELLER).map(([k,m]) => `<option value="${k}"${k===model?" selected":""}>${esc(m.ad)}</option>`).join("");
