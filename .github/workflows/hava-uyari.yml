@@ -40,6 +40,8 @@ jobs:
           NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
           SITE_URL: ${{ vars.SITE_URL }}
           TEST: ${{ inputs.test }}
+          UYARI_SEHIRLER: ${{ vars.UYARI_SEHIRLER }}
+          UYARI_SEVIYE: ${{ vars.UYARI_SEVIYE }}
 
       - name: Durumu kaydet
         if: always()
