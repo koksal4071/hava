@@ -631,15 +631,16 @@ async function dogModel(k){
 function dogYenile(){ dogSonuc = null; if(dogGorunur) dogHesapla(); else $("dogozet").innerHTML = '<div class="kart durumyok">Bu bölüm ekrana gelince hesaplanır…</div>'; }
 async function dogHesapla(){
   if(dogCalisiyor || dogSonuc) return;
-  const an = `dog_${yer.lat}_${yer.lon}`, eski = ls.get(an, null);
-  if(eski && Date.now() - eski.zaman < 3*3600*1000){ dogSonuc = eski; dogCiz(); return; }
+  const an = `dog2_${yer.lat}_${yer.lon}`, eski = ls.get(an, null);   // dog2: eski sürümün boş kayıtlarını yok say
+  const gecerli = eski && eski.teshis && Object.values(eski.model || {}).some(m => m.mae?.[0] != null);
+  if(gecerli && Date.now() - eski.zaman < 3*3600*1000){ dogSonuc = eski; dogCiz(); return; }
   dogCalisiyor = true;
   $("dogozet").innerHTML = '<div class="kart durumyok">Modellerin geçmiş tahminleri indiriliyor…</div>';
   const refIstek = fetch(FC + "?" + new URLSearchParams({latitude:yer.lat, longitude:yer.lon, timezone:"auto", past_days:7, forecast_days:1,
     hourly:"temperature_2m,precipitation"})).then(x => x.ok ? x.json() : null).catch(() => null);
   const [r, ref] = await Promise.all([Promise.allSettled(KARSILASTIR.map(k => dogModel(k).then(h => [k, h]))), refIstek]);
   dogCalisiyor = false;
-  if(an !== `dog_${yer.lat}_${yer.lon}`) return dogYenile();
+  if(an !== `dog2_${yer.lat}_${yer.lon}`) return dogYenile();
   const H = {}; r.forEach(x => { if(x.status === "fulfilled") H[x.value[0]] = x.value[1]; });
   const ks = Object.keys(H);
   if(!ks.length){ $("dogozet").innerHTML = `<div class="kart durumyok">Geçmiş tahminler alınamadı (${esc(r[0].reason?.message||"bağlantı")}).</div>`; return; }
