@@ -1,0 +1,49 @@
+name: Hava uyarısı
+
+on:
+  schedule:
+    - cron: "*/30 * * * *"      # 30 dakikada bir (GitHub birkaç dakika gecikebilir)
+  workflow_dispatch:
+    inputs:
+      test:
+        description: "Test bildirimi gönder"
+        type: boolean
+        default: false
+
+concurrency:
+  group: hava-uyari
+  cancel-in-progress: false
+
+jobs:
+  kontrol:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Önceki durumu yükle (aynı uyarıyı tekrar göndermemek için)
+        uses: actions/cache/restore@v4
+        with:
+          path: uyari_durum.json
+          key: uyari-durum-${{ github.run_id }}
+          restore-keys: uyari-durum-
+
+      - name: Kontrol et ve bildir
+        run: |
+          pip install --quiet requests
+          python uyari.py
+        env:
+          NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+          SITE_URL: ${{ vars.SITE_URL }}
+          TEST: ${{ inputs.test }}
+
+      - name: Durumu kaydet
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: uyari_durum.json
+          key: uyari-durum-${{ github.run_id }}
