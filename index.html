@@ -774,8 +774,12 @@ function dgrafik(){
   const x = i => sl + i/(t.length-1)*gw, y = v => us + (tmax-v)/(tmax-tmin)*gh;
   let s = "", gs = 0;
   for(let k=0;k<=4;k++){ const v = tmin+(tmax-tmin)*k/4; s += `<line x1="${sl}" x2="${W-sg}" y1="${y(v)}" y2="${y(v)}" stroke="var(--cizgi)"/><text x="${sl-6}" y="${y(v)+4}" text-anchor="end" font-size="11" fill="var(--soluk)">${Math.round(v)}°</text>`; }
-  t.forEach((z,i) => { if(z.slice(11,13) === "00"){ s += `<line x1="${x(i)}" x2="${x(i)}" y1="${us}" y2="${us+gh}" stroke="var(--cizgi)"/>`;
-    if(W >= 600 || gs % 2 === 0) s += `<text x="${x(i)+3}" y="${H-8}" font-size="11" fill="var(--soluk)">${W >= 600 ? gunKisa(z.slice(0,10)) : z.slice(8,10)+"."+z.slice(5,7)}</text>`; gs++; } });
+  // etiket aralığı: genişliğe ve gün sayısına göre (etiket başına en az ~70 px)
+  const gunSay = Math.max(1, t.length/24), uzun = gw/gunSay >= 70, adim = Math.max(1, Math.ceil((uzun ? 70 : 42) / (gw/gunSay)));
+  t.forEach((z,i) => { if(z.slice(11,13) === "00"){
+    if(gs % adim === 0){ s += `<line x1="${x(i)}" x2="${x(i)}" y1="${us}" y2="${us+gh}" stroke="var(--cizgi)"/>`;
+      s += `<text x="${x(i)+3}" y="${H-8}" font-size="11" fill="var(--soluk)">${uzun ? gunKisa(z.slice(0,10)) : z.slice(8,10)+"."+z.slice(5,7)}</text>`; }
+    gs++; } });
   const cizgi = (a, renk, gen) => `<polyline points="${a.map((v,i) => v == null ? null : `${x(i)},${y(v)}`).filter(Boolean).join(" ")}" fill="none" stroke="${renk}" stroke-width="${gen}" stroke-linejoin="round"/>`;
   ks.forEach(k => s += cizgi(M[k].seri, MODELLER[k].renk, 1.6));
   s += cizgi(refT, "var(--ink)", 2.8);
