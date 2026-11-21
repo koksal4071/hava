@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="theme-color" content="#0b3a66">
+<script>try{var t=JSON.parse(localStorage.getItem("hava_tema"));if(t&&t!=="oto")document.documentElement.dataset.theme=t}catch(e){}</script>
 <title>Hava Durumu</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -19,6 +20,12 @@
 --soluk:light-dark(#5b6b7d,#93a4b8);--cizgi:light-dark(#dde5ee,#223246);--mavi:#2b7bd0;--yagis:#3b9be8;
 --sari:#f4b400;--turuncu:#f08a00;--kirmizi:#d93a2b;--yesil:#1f9d63}
 :root[data-theme=light]{color-scheme:light}:root[data-theme=dark]{color-scheme:dark}
+:root[data-theme=gece]{color-scheme:dark;--gok:#000;--gok2:#0a0d12;--bg:#000;--kart:#0a0a0a;--ink:#d9d4cc;--soluk:#8a8f96;--cizgi:#1c1f24;--mavi:#4a8fd6}
+:root[data-theme=gece] .ust{border-bottom:1px solid #1c1f24}
+.taban{transition:filter .2s}
+:root[data-theme=dark] .taban{filter:invert(1) hue-rotate(180deg) brightness(.9) contrast(.85)}
+:root[data-theme=gece] .taban{filter:invert(1) hue-rotate(180deg) brightness(.7) contrast(.9)}
+@media (prefers-color-scheme:dark){:root:not([data-theme]) .taban{filter:invert(1) hue-rotate(180deg) brightness(.9) contrast(.85)}}
 *{box-sizing:border-box;min-width:0}
 body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 Figtree,"Segoe UI",system-ui,sans-serif;overflow-x:clip}
 button,input{font:inherit}
@@ -37,7 +44,7 @@ box-shadow:0 10px 30px rgba(0,0,0,.25);z-index:5;overflow:hidden;display:none}
 .favs{max-width:1100px;margin:10px auto 0;display:flex;gap:6px;flex-wrap:wrap;align-items:center}
 .modelsec{max-width:1100px;margin:10px auto 0;display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:14px}
 .modelsec select{height:40px;border-radius:10px;border:1px solid rgba(255,255,255,.35);background:rgba(255,255,255,.12);color:#fff;padding:0 10px;font-size:15px}
-.modelsec select option{color:#0e1b2b}.modelsec select:focus-visible{outline:3px solid var(--sari)}
+.modelsec select option{color:#0e1b2b;background:#fff}.tlab{margin-left:6px}.modelsec select:focus-visible{outline:3px solid var(--sari)}
 .duz{display:inline-flex;align-items:center;gap:6px;min-height:40px;padding:0 12px;border-radius:10px;border:1px solid rgba(255,255,255,.35);background:rgba(255,255,255,.12);cursor:pointer;font-size:14px}
 .duz input{width:18px;height:18px;accent-color:#f4b400}
 .mnot{opacity:.8;font-size:13px}
@@ -140,7 +147,7 @@ footer a{color:inherit}
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7"/></svg></button>
     <div class="oneri" id="oneri" role="listbox"></div>
   </form>
-  <div class="modelsec"><label for="model">Model:</label><select id="model"></select><label class="duz" title="Seçili modelin son 30 gündeki saatlik sapmasını tahminden çıkarır"><input type="checkbox" id="duzelt"> Yerel düzeltme</label><span class="mnot" id="mnot"></span></div>
+  <div class="modelsec"><label for="model">Model:</label><select id="model"></select><label class="duz" title="Seçili modelin son 30 gündeki saatlik sapmasını tahminden çıkarır"><input type="checkbox" id="duzelt"> Yerel düzeltme</label><label for="tema" class="tlab">Görünüm:</label><select id="tema"><option value="oto">Otomatik</option><option value="light">Açık</option><option value="dark">Koyu</option><option value="gece">Gece (siyah)</option></select><span class="mnot" id="mnot"></span></div>
   <div class="favs" id="favs"></div>
   <section class="anlik" id="anlik"><div class="durumyok" style="color:#fff">Yükleniyor…</div></section>
   <div class="zaman" id="zaman"></div>
@@ -916,6 +923,16 @@ function favCiz(){
   $("favs").querySelectorAll(".fav").forEach(b => b.onclick = () => { yer = f[+b.dataset.k]; ls.set("hava_yer", yer); yukle(); });
 }
 
+/* ---------- görünüm (tema) ---------- */
+function temaUygula(t){
+  if(t === "oto") delete document.documentElement.dataset.theme; else document.documentElement.dataset.theme = t;
+  const koyu = t === "dark" || t === "gece" || (t === "oto" && matchMedia("(prefers-color-scheme: dark)").matches);
+  document.querySelector('meta[name=theme-color]').content = t === "gece" ? "#000000" : (koyu ? "#06182b" : "#0b3a66");
+}
+$("tema").value = ls.get("hava_tema", "oto"); temaUygula($("tema").value);
+$("tema").onchange = e => { ls.set("hava_tema", e.target.value); temaUygula(e.target.value); if(veri) ciz(); };
+matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => temaUygula($("tema").value));
+
 /* ---------- yağış radarı (RainViewer + Leaflet) ---------- */
 const RV_URL = "https://api.rainviewer.com/public/weather-maps.json";
 const LF_JS = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.js", LF_CSS = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css";
@@ -943,7 +960,7 @@ async function radarKur(){
       $("radar").innerHTML = "";
       radar.harita = L.map("radar", {zoomControl:true, minZoom:4, maxZoom:10, attributionControl:true}).setView([yer.lat, yer.lon], 7);
       radar.harita.attributionControl.setPrefix(false);
-      L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {maxZoom:10,
+      L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {maxZoom:10, className:"taban",
         attribution:'© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> katkıcıları'}).addTo(radar.harita);
       radar.merkez = yer.lat + "," + yer.lon;
     }
