@@ -135,6 +135,7 @@ footer a{color:inherit}
 .rbaglar a{font-size:13px;border:1px solid var(--cizgi);border-radius:999px;padding:5px 12px;color:var(--ink);text-decoration:none;background:var(--kart)}
 .rbaglar a:hover{border-color:var(--mavi)}
 .gozlem{margin-top:12px}
+.dkay{font-size:12px;opacity:.75;margin-top:2px}
 .gozlem .bas{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;align-items:baseline}
 .gozlem .bas b{font-size:15px}.gozlem .bas span{color:var(--soluk);font-size:13px}
 .gozlem .ana{display:grid;grid-template-columns:auto minmax(0,1fr);gap:16px;align-items:center;margin-top:10px}
@@ -146,11 +147,6 @@ footer a{color:inherit}
 .gozlem .ham{font-family:ui-monospace,Consolas,monospace;font-size:12px;color:var(--soluk);margin-top:8px;word-break:break-all}
 .gozlem .ist{cursor:pointer}.gozlem .ist.aktif{background:var(--gok);border-color:var(--gok);color:#fff}
 .gozlem .eski{color:var(--turuncu);font-weight:600}
-.mgmkart{display:flex;gap:16px;align-items:center;flex-wrap:wrap}
-.mgmkart .gorsel{background:#fff;border-radius:10px;padding:6px;line-height:0;border:1px solid var(--cizgi)}
-.mgmkart .gorsel img{display:block}
-.mgmkart .yazi{flex:1;min-width:200px;font-size:14px;color:var(--soluk)}.mgmkart .yazi b{color:var(--ink)}
-.mgmtahmin{margin-top:12px;overflow-x:auto}.mgmtahmin .gorsel{display:inline-block}
 </style>
 </head>
 <body>
@@ -173,8 +169,7 @@ footer a{color:inherit}
 <main>
   <div class="uyarilar" id="uyarilar"></div>
 
-  <h2>Gerçek gözlem <small>MGM resmî ölçüm + en yakın havalimanı (METAR)</small></h2>
-  <div class="kart" id="mgm"><div class="durumyok">MGM verisi yükleniyor…</div></div>
+  <h2>Gerçek gözlem <small>en yakın havalimanı istasyonu · METAR</small></h2>
   <div class="kart gozlem" id="gozlem"><div class="durumyok">Gözlem yükleniyor…</div></div>
 
   <h2>Yağış beklentisi <small>önümüzdeki saatler</small></h2>
@@ -224,7 +219,7 @@ footer a{color:inherit}
 </main>
 <footer>
   Veri: <a href="https://open-meteo.com/" rel="noopener">Open-Meteo</a> (ECMWF, DWD ICON, NOAA GFS vb. modellerin en uygun birleşimi). Sayfa her açılışta ve açık kaldıkça 10 dakikada bir güncellenir.
-  Radar: <a href="https://www.rainviewer.com/" rel="noopener">Weather data by RainViewer</a> (kişisel kullanım). Harita: © OpenStreetMap katkıcıları. Gözlem: <a href="https://www.mgm.gov.tr/" rel="noopener">Meteoroloji Genel Müdürlüğü</a> resmî site grafikleri ve NOAA Aviation Weather Center (havalimanı METAR raporları).
+  Radar: <a href="https://www.rainviewer.com/" rel="noopener">Weather data by RainViewer</a> (kişisel kullanım). Harita: © OpenStreetMap katkıcıları. Anlık hava durumu ve gözlem: NOAA Aviation Weather Center (havalimanı METAR raporları).
   Uyarılar model verisinden otomatik üretilir, resmî değildir; resmî uyarılar için <a href="https://www.mgm.gov.tr/" rel="noopener">Meteoroloji Genel Müdürlüğü</a>.
 </footer>
 
@@ -318,8 +313,8 @@ async function yukle(){
   $("zaman").textContent = "Güncelleniyor…";
   kveri = null; kisYenile(); dogYenile();
   radarKur();
-  gozlemYukle(); mgmCiz();
-  try { veriHam = await getir(); veri = veriHam; sonGuncelleme = Date.now(); duzeltUygula(); ciz(); gozlemCiz(); karsilastir();
+  gozlemYukle();
+  try { veriHam = await getir(); veri = veriHam; sonGuncelleme = Date.now(); duzeltUygula(); ciz(); gozlemCiz(); anlikDurumGozlem(); karsilastir();
         if(duzeltAktif && KARSILASTIR.includes(model)) dogHesapla(); }
   catch(e){ $("zaman").textContent = "Veri alınamadı (" + e.message + "). İnternet bağlantını kontrol edip yenile."; }
 }
@@ -375,7 +370,7 @@ function ciz(){
   $("anlik").innerHTML = `
     <div><h1 class="yer">${esc(yer.ad)}<small>${esc(yer.ek||"")}</small></h1>
       <div class="sicak">${ikon(c.weather_code, c.is_day)}<div><div class="derece">${Math.round(c.temperature_2m)}°</div>
-      <div class="durum">${KOD[c.weather_code]||"–"}</div><div class="his">Hissedilen ${yuv(c.apparent_temperature)}° · Bugün ${yuv(g.temperature_2m_min[0])}° / ${yuv(g.temperature_2m_max[0])}°</div></div></div></div>
+      <div class="durum">${KOD[c.weather_code]||"–"}</div><div class="dkay" id="dkay">Durum: model tahmini</div><div class="his">Hissedilen ${yuv(c.apparent_temperature)}° · Bugün ${yuv(g.temperature_2m_min[0])}° / ${yuv(g.temperature_2m_max[0])}°</div></div></div></div>
     <div class="olcum">
       <div class="olc"><span>Basınç</span><b>${yuv(c.pressure_msl)} hPa</b><span>${egilim} (3 sa: ${basEgilim>=0?"+":""}${yuv(basEgilim,1)})</span></div>
       <div class="olc"><span>Rüzgâr</span><b><span class="ok" style="transform:rotate(${c.wind_direction_10m+180}deg)">↑</span> ${yuv(c.wind_speed_10m)} km/sa</b><span>${YON[yonI]} · hamle ${yuv(c.wind_gusts_10m)}</span></div>
@@ -945,37 +940,6 @@ function favCiz(){
   $("favs").querySelectorAll(".fav").forEach(b => b.onclick = () => { yer = f[+b.dataset.k]; ls.set("hava_yer", yer); yukle(); });
 }
 
-/* ---------- MGM resmî grafikleri (mgm.gov.tr/site/link-vermek-icin.aspx) ---------- */
-// MGM içeriği değiştirilmeden, olduğu gibi gösterilir. "m" parametresi: büyük harf, Türkçe karaktersiz.
-function mgmAd(a){
-  const t = (a||"").toLocaleUpperCase("tr-TR").replace(/Ç/g,"C").replace(/Ğ/g,"G").replace(/İ/g,"I").replace(/Ö/g,"O").replace(/Ş/g,"S").replace(/Ü/g,"U").trim();
-  return t === "KAHRAMANMARAS" ? "K.MARAS" : t;
-}
-function mgmAdaylar(){
-  const il = (yer.ek||"").split(",")[0].trim();
-  return [...new Set([yer.ad !== "Konumum" ? mgmAd(yer.ad) : "", mgmAd(il)].filter(Boolean))];
-}
-function mgmIl(){ return (yer.ek||"").split(",")[0].trim() || yer.ad; }
-function mgmCiz(){
-  const ad = mgmAdaylar(), dk = Math.floor(Date.now()/600000);
-  if(!ad.length){ $("mgm").innerHTML = '<div class="durumyok">MGM grafiği için şehir adıyla arama yap (konum ile seçilen yerde ad bilinmiyor).</div>'; return; }
-  const url = (tur, m) => tur === "son"
-    ? `https://www.mgm.gov.tr/sunum/sondurum-show-2.aspx?m=${encodeURIComponent(m)}&rC=dde5ee&rZ=fff&_=${dk}`
-    : `https://www.mgm.gov.tr/sunum/tahmin-show-2.aspx?m=${encodeURIComponent(m)}&basla=1&bitir=5&rC=dde5ee&rZ=fff&_=${dk}`;
-  const m0 = ad[0];
-  $("mgm").innerHTML = `
-    <div class="mgmkart">
-      <a class="gorsel" href="https://www.mgm.gov.tr/tahmin/il-ve-ilceler.aspx?il=${encodeURIComponent(mgmIl())}" target="_blank" rel="noopener" title="MGM'de aç">
-        <img id="mgmson" src="${url("son", m0)}" width="140" height="100" alt="MGM son durum: ${esc(m0)}"></a>
-      <div class="yazi"><b>MGM son durum · ${esc(yer.ad !== "Konumum" ? yer.ad : mgmIl())}</b><br>Resmî istasyon ölçümü. Üstteki büyük değer model hesabıdır; şüphede kalırsan buna güven.</div>
-    </div>
-    <div style="font-size:13px;color:var(--soluk);margin-top:6px">Kaynak: <a href="https://www.mgm.gov.tr/" target="_blank" rel="noopener">Meteoroloji Genel Müdürlüğü</a></div>`;
-  // ilçe adı tanınmazsa il adıyla tekrar dene
-  ["mgmson"].forEach(id => { const im = $(id); let k = 0;
-    im.onerror = () => { k++; if(k < ad.length){ im.src = url(id === "mgmson" ? "son" : "tah", ad[k]); }
-      else im.closest(".gorsel").outerHTML = '<span class="durumyok">MGM grafiği yüklenemedi.</span>'; }; });
-}
-
 /* ---------- gerçek gözlem (METAR, gozlem.json) ---------- */
 const BULUT_AD = {FEW:"Az bulutlu", SCT:"Parçalı bulutlu", BKN:"Çok bulutlu", OVC:"Kapalı", VV:"Gökyüzü görünmüyor"};
 const BULUT_SIRA = {FEW:1, SCT:2, BKN:3, OVC:4, VV:5};
@@ -1017,7 +981,7 @@ async function gozlemYukle(){
       return;
     }
   }
-  gozlemCiz();
+  gozlemCiz(); anlikDurumGozlem();
 }
 function gozlemCiz(){
   if(!gozlemVeri) return;
@@ -1063,6 +1027,44 @@ function gozlemCiz(){
   $("gozlem").querySelectorAll(".ist").forEach(b => b.onclick = () => { gozlemSecili = b.dataset.id; gozlemCiz(); });
 }
 
+// Üstteki "durum" yazısı ve ikonu: yakında taze METAR varsa ondan; sıcaklık modelde kalır.
+const DURUM_KM = 100, DURUM_DK = 90;
+function metarKod(s){
+  const h = (s.hava||[]).join(" ");
+  if(/TS/.test(h)) return 95;
+  if(/FZ(RA|DZ)/.test(h)) return 66;
+  if(/GR|GS/.test(h)) return 96;
+  if(/SHSN/.test(h)) return /\+SHSN/.test(h) ? 86 : 85;
+  if(/SN|SG|PL/.test(h)) return /\+SN/.test(h) ? 75 : /-SN/.test(h) ? 71 : 73;
+  if(/SHRA/.test(h)) return /\+SHRA/.test(h) ? 82 : /-SHRA/.test(h) ? 80 : 81;
+  if(/RA/.test(h)) return /\+RA/.test(h) ? 65 : /-RA/.test(h) ? 61 : 63;
+  if(/DZ/.test(h)) return 51;
+  if(/FG/.test(h)) return 45;
+  const g = gokyuzu(s);
+  if(g.seviye == null) return null;
+  return [0,1,2,3,3,45][g.seviye];
+}
+function metarDurum(s){
+  const yagis = (s.hava||[]).filter(k => /TS|RA|DZ|SN|SG|PL|GR|GS|UP|FG/.test(k)).map(havaCoz);
+  const gk = gokyuzu(s), pus = (s.hava||[]).some(k => /BR|HZ/.test(k));
+  if(yagis.length){ const t = yagis.join(", "); return t.charAt(0).toLocaleUpperCase("tr-TR") + t.slice(1); }
+  if(gk.seviye == null) return null;
+  return gk.ad.replace(" (CAVOK)","") + (pus ? ", puslu" : "");
+}
+function anlikDurumGozlem(){
+  if(!gozlemVeri || !veri || !$("dkay")) return;
+  const now = Date.now()/1000;
+  const s = gozlemVeri.istasyonlar.filter(x => now - x.zaman < DURUM_DK*60 && x.kaynak !== "mgm")
+    .map(x => ({...x, km: mesafe(yer.lat, yer.lon, x.lat, x.lon)})).filter(x => x.km <= DURUM_KM).sort((a,b) => a.km - b.km)[0];
+  if(!s) return;
+  const yazi = metarDurum(s), kod = metarKod(s);
+  if(!yazi || kod == null) return;
+  const kutu = $("anlik").querySelector(".sicak");
+  kutu.querySelector(".durum").textContent = yazi;
+  const sv = kutu.querySelector(":scope > svg"); if(sv) sv.outerHTML = ikon(kod, veri.current.is_day);
+  $("dkay").textContent = `Durum: ${istAd(s.ad).split("/")[0]} gözlemi · ${Math.round(s.km)} km · ${Math.round((now - s.zaman)/60)} dk önce`;
+}
+
 /* ---------- görünüm (tema) ---------- */
 function temaUygula(t){
   if(t === "oto") delete document.documentElement.dataset.theme; else document.documentElement.dataset.theme = t;
@@ -1070,7 +1072,7 @@ function temaUygula(t){
   document.querySelector('meta[name=theme-color]').content = t === "gece" ? "#000000" : (koyu ? "#06182b" : "#0b3a66");
 }
 $("tema").value = ls.get("hava_tema", "oto"); temaUygula($("tema").value);
-$("tema").onchange = e => { ls.set("hava_tema", e.target.value); temaUygula(e.target.value); if(veri) ciz(); };
+$("tema").onchange = e => { ls.set("hava_tema", e.target.value); temaUygula(e.target.value); if(veri){ ciz(); anlikDurumGozlem(); } };
 matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => temaUygula($("tema").value));
 
 /* ---------- yağış radarı (RainViewer + Leaflet) ---------- */
