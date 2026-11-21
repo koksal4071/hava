@@ -635,7 +635,9 @@ async function dogHesapla(){
   if(eski && Date.now() - eski.zaman < 3*3600*1000){ dogSonuc = eski; dogCiz(); return; }
   dogCalisiyor = true;
   $("dogozet").innerHTML = '<div class="kart durumyok">Modellerin geçmiş tahminleri indiriliyor…</div>';
-  const r = await Promise.allSettled(KARSILASTIR.map(k => dogModel(k).then(h => [k, h])));
+  const refIstek = fetch(FC + "?" + new URLSearchParams({latitude:yer.lat, longitude:yer.lon, timezone:"auto", past_days:7, forecast_days:1,
+    hourly:"temperature_2m,precipitation"})).then(x => x.ok ? x.json() : null).catch(() => null);
+  const [r, ref] = await Promise.all([Promise.allSettled(KARSILASTIR.map(k => dogModel(k).then(h => [k, h]))), refIstek]);
   dogCalisiyor = false;
   if(an !== `dog_${yer.lat}_${yer.lon}`) return dogYenile();
   const H = {}; r.forEach(x => { if(x.status === "fulfilled") H[x.value[0]] = x.value[1]; });
@@ -644,14 +646,19 @@ async function dogHesapla(){
   const simdi = veri?.current?.time || new Date().toISOString().slice(0,16);
   const t = H[ks[0]].time.filter(z => z < simdi);
   const al = (k, ad, z) => { const h = H[k], j = h.time.indexOf(z); return j < 0 ? null : (h[ad]?.[j] ?? null); };
-  const refT = t.map(z => ortala(ks.map(k => al(k, "temperature_2m_previous_day0", z))));
-  const refP = t.map(z => ortala(ks.map(k => al(k, "precipitation_previous_day0", z))));
+  // Gerçekleşen: ana servisin geçmiş saatleri (en güncel analiz); yoksa modellerin day0 ortalaması
+  const rh = ref?.hourly, ri = z => rh ? rh.time.indexOf(z) : -1;
+  const refT = t.map(z => { const j = ri(z); const v = j >= 0 ? rh.temperature_2m[j] : null; return v ?? ortala(ks.map(k => al(k, "temperature_2m_previous_day0", z))); });
+  const refP = t.map(z => { const j = ri(z); const v = j >= 0 ? rh.precipitation[j] : null; return v ?? ortala(ks.map(k => al(k, "precipitation_previous_day0", z))); });
+  const teshis = ks.map(k => { const h = H[k], dolu = ad => (h[ad]||[]).filter(v => v != null).length;
+    return `${MODELLER[k].ad}: ${h.time.length} saat (${h.time[0]?.slice(5,16)} → ${h.time[h.time.length-1]?.slice(5,16)}), day0 ${dolu("temperature_2m_previous_day0")}, day1 ${dolu("temperature_2m_previous_day1")}, day2 ${dolu("temperature_2m_previous_day2")} dolu`; });
+  teshis.push(`Referans: ${rh ? rh.time.length + " saat" : "alınamadı"} · geçmiş saat: ${t.length} · eşleşen referans: ${refT.filter(v => v != null).length}`);
   const gunler = [...new Set(t.map(z => z.slice(0,10)))].filter(g => t.filter(z => z.startsWith(g)).length >= 20);
-  const sonuc = {zaman: Date.now(), t, refT, refP, gunler, model: {}};
+  const sonuc = {zaman: Date.now(), t, refT, refP, gunler, model: {}, teshis};
   for(const k of ks){
     const m = {mae: [], bias: null, isabet: null, seri: t.map(z => al(k, "temperature_2m_previous_day1", z)), gun: {}};
     [1,2,3].forEach(L => { const e = t.map((z,i) => { const v = al(k, `temperature_2m_previous_day${L}`, z); return v != null && refT[i] != null ? v - refT[i] : null; }).filter(x => x != null);
-      m.mae.push(e.length >= 24 ? ortala(e.map(Math.abs)) : null); if(L === 1) m.bias = e.length >= 24 ? ortala(e) : null; });
+      m.mae.push(e.length >= 12 ? ortala(e.map(Math.abs)) : null); if(L === 1) m.bias = e.length >= 12 ? ortala(e) : null; });
     let hit = 0, n = 0;
     gunler.forEach(g => { const idx = t.map((z,i) => z.startsWith(g) ? i : -1).filter(i => i >= 0);
       const mt = idx.map(i => m.seri[i]).filter(v => v != null), rt = idx.map(i => refT[i]).filter(v => v != null);
@@ -661,11 +668,12 @@ async function dogHesapla(){
     m.isabet = n ? hit/n*100 : null;
     sonuc.model[k] = m;
   }
-  dogSonuc = sonuc; ls.set(an, sonuc); dogCiz();
+  dogSonuc = sonuc; if(Object.values(sonuc.model).some(m => m.mae[0] != null)) ls.set(an, sonuc); dogCiz();
 }
 function dogCiz(){
   const {model: M, gunler, t, refT} = dogSonuc, ks = Object.keys(M).filter(k => M[k].mae[0] != null);
-  if(!ks.length){ $("dogozet").innerHTML = '<div class="kart durumyok">Bu konum için yeterli geçmiş tahmin yok.</div>'; return; }
+  if(!ks.length){ $("dogozet").innerHTML = `<div class="kart durumyok">Bu konum için yeterli geçmiş tahmin yok.<br><small style="display:block;text-align:left;margin-top:10px;line-height:1.6">Teşhis (ekran görüntüsünü gönderebilirsin):<br>${(dogSonuc.teshis||[]).map(esc).join("<br>")}</small></div>`;
+    $("dtab").innerHTML = ""; $("dgrafik").innerHTML = ""; $("defs").innerHTML = ""; return; }
   const sira = [...ks].sort((a,b) => M[a].mae[0] - M[b].mae[0]), en = sira[0], ad = k => esc(MODELLER[k].ad.replace(" (yapay zekâ)",""));
   const enIyi = (L) => Math.min(...ks.map(k => M[k].mae[L] ?? 99)), isabetMaks = Math.max(...ks.map(k => M[k].isabet ?? -1));
   const egilim = b => b == null ? "–" : Math.abs(b) < 0.3 ? "dengeli" : `${b > 0 ? "sıcak" : "soğuk"} tahmin (${b > 0 ? "+" : ""}${yuv(b,1)}°)`;
@@ -689,7 +697,7 @@ function dogCiz(){
           const f = Math.max(Math.abs(d.mx - r.rx), Math.abs(d.mn - r.rn)), sinif = f <= 1 ? "iyi" : f >= 3 ? "kotu" : "";
           return `<td class="n ${sinif}">${yuv(d.mx)}° / ${yuv(d.mn)}°<br><small>${yuv(d.mp,1)} mm</small></td>`; }).join("") + "</tr>"; }).join("") + "</tbody>";
   $("dognot").innerHTML = `Sapma: modelin 24/48/72 saat önceki saatlik sıcaklık tahmininin, gerçekleşen değerden ortalama mutlak farkı (küçük = iyi).
-    "Gerçekleşen": istasyon ölçümü değil, modellerin en güncel analizlerinin ortalaması (Open-Meteo Previous Runs API). İstasyon ölçümleri için MGM.
+    "Gerçekleşen": istasyon ölçümü değil, Open-Meteo’nun en güncel model analizi; geçmiş tahminler Previous Runs API’den. İstasyon ölçümleri için MGM.
     Günlük tabloda yeşil: ±1°C içinde, kırmızı: 3°C ve üzeri fark. Hesaplandı ${new Date(dogSonuc.zaman).toLocaleTimeString("tr-TR",{hour:"2-digit",minute:"2-digit"})} (3 saat önbellek).`;
 }
 const dsvg = $("dgrafik");
