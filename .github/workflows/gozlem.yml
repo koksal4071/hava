@@ -1,0 +1,35 @@
+name: Gözlem verisi (METAR)
+
+on:
+  schedule:
+    - cron: "12,42 * * * *"   # Türkiye METAR'ları genelde :20 ve :50'de (UTC'de aynı dakika) yayınlanır
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: gozlem
+  cancel-in-progress: false
+
+jobs:
+  al:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: METAR çek
+        run: |
+          pip install requests
+          python gozlem.py
+      - name: Depoya kaydet
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add gozlem.json
+          if git diff --cached --quiet; then echo "Değişiklik yok"; exit 0; fi
+          git commit -m "Gözlem verisi güncellendi"
+          for i in 1 2 3; do git pull --rebase && git push && break; sleep 5; done
