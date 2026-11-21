@@ -967,14 +967,11 @@ function mgmCiz(){
     <div class="mgmkart">
       <a class="gorsel" href="https://www.mgm.gov.tr/tahmin/il-ve-ilceler.aspx?il=${encodeURIComponent(mgmIl())}" target="_blank" rel="noopener" title="MGM'de aç">
         <img id="mgmson" src="${url("son", m0)}" width="140" height="100" alt="MGM son durum: ${esc(m0)}"></a>
-      <div class="yazi"><b>MGM son durum</b> · ${esc(yer.ad !== "Konumum" ? yer.ad : mgmIl())}<br>Meteoroloji Genel Müdürlüğü'nün istasyon ölçümü. Bulut ve hava durumu için en güvenilir kaynak budur;
-        üstteki büyük değer model hesabıdır. Görsele basınca MGM sayfası açılır.</div>
+      <div class="yazi"><b>MGM son durum · ${esc(yer.ad !== "Konumum" ? yer.ad : mgmIl())}</b><br>Resmî istasyon ölçümü. Üstteki büyük değer model hesabıdır; şüphede kalırsan buna güven.</div>
     </div>
-    <div class="mgmtahmin"><a class="gorsel" href="https://www.mgm.gov.tr/tahmin/il-ve-ilceler.aspx?il=${encodeURIComponent(mgmIl())}" target="_blank" rel="noopener">
-      <img id="mgmtah" src="${url("tah", m0)}" width="400" height="100" alt="MGM 5 günlük tahmin: ${esc(m0)}"></a></div>
-    <div style="font-size:13px;color:var(--soluk);margin-top:6px">Kaynak: <a href="https://www.mgm.gov.tr/" target="_blank" rel="noopener">Meteoroloji Genel Müdürlüğü</a> · 5 günlük resmî tahmin, kendi model tablonla karşılaştırmak için.</div>`;
+    <div style="font-size:13px;color:var(--soluk);margin-top:6px">Kaynak: <a href="https://www.mgm.gov.tr/" target="_blank" rel="noopener">Meteoroloji Genel Müdürlüğü</a></div>`;
   // ilçe adı tanınmazsa il adıyla tekrar dene
-  ["mgmson","mgmtah"].forEach(id => { const im = $(id); let k = 0;
+  ["mgmson"].forEach(id => { const im = $(id); let k = 0;
     im.onerror = () => { k++; if(k < ad.length){ im.src = url(id === "mgmson" ? "son" : "tah", ad[k]); }
       else im.closest(".gorsel").outerHTML = '<span class="durumyok">MGM grafiği yüklenemedi.</span>'; }; });
 }
