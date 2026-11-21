@@ -116,6 +116,17 @@ footer a{color:inherit}
 @media(max-width:600px){.ara{gap:6px}.ara .btn{min-width:44px;padding:0 10px}.ust{padding-inline:12px}main{padding-inline:12px}.gun>span{font-size:12px}.olcum{grid-template-columns:repeat(2,minmax(0,1fr))}.gizle{display:none}td,th{padding:8px 4px;font-size:14px}
 .ic span{display:none}.ic svg{width:28px;height:28px}.aralik{min-width:50px}.uzun{display:none}.kisa{display:inline}}
 @media(prefers-reduced-motion:reduce){.ok{transition:none}}
+.radar{height:360px;border-radius:12px;overflow:hidden;background:light-dark(#dfe8f1,#0d1724);position:relative;z-index:0}
+.radar .durumyok{padding:40px 12px;text-align:center}
+@media (max-width:600px){.radar{height:300px}}
+.rkontrol{display:flex;gap:10px;align-items:center;margin-top:10px}
+.rkontrol input[type=range]{flex:1;accent-color:var(--mavi);height:32px}
+.rzaman{font-variant-numeric:tabular-nums;font-weight:700;min-width:7.5em;text-align:right;font-size:14px}
+.rzaman small{display:block;font-weight:500;color:var(--soluk);font-size:12px}
+.leaflet-container{font:inherit;font-size:12px}
+.rbaglar{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+.rbaglar a{font-size:13px;border:1px solid var(--cizgi);border-radius:999px;padding:5px 12px;color:var(--ink);text-decoration:none;background:var(--kart)}
+.rbaglar a:hover{border-color:var(--mavi)}
 </style>
 </head>
 <body>
@@ -141,6 +152,21 @@ footer a{color:inherit}
   <h2>Yağış beklentisi <small>önümüzdeki saatler</small></h2>
   <div class="yag" id="yag"></div>
   <div id="kar"></div>
+
+  <h2 id="radarbaslik">Yağış radarı <small>son 2 saat · 10 dakikalık adımlar</small></h2>
+  <div class="kart">
+    <div class="radar" id="radar"><div class="durumyok">Bu bölüm ekrana gelince yüklenir…</div></div>
+    <div class="rkontrol">
+      <button class="seg" type="button" id="roynat" aria-label="Oynat" title="Oynat / durdur" disabled>▶</button>
+      <input type="range" id="rkaydir" min="0" max="0" value="0" aria-label="Radar görüntüsünün zamanı" disabled>
+      <span class="rzaman" id="rzaman">–</span>
+    </div>
+    <div class="efs" id="rdurum">Renk koyulaştıkça yağış şiddetlenir; kar ayrı renk tonuyla gösterilir. Haritayı kaydırıp yakınlaştırabilirsin.</div>
+    <div class="rbaglar">
+      <a href="https://www.mgm.gov.tr/sondurum/radar.aspx?rG=anm&amp;rR=00" target="_blank" rel="noopener">MGM birleşik radar (hareketli) ↗</a>
+      <a href="https://www.mgm.gov.tr/sondurum/radar.aspx" target="_blank" rel="noopener">MGM tek tek radarlar ↗</a>
+    </div>
+  </div>
 
   <h2>48 saat <small>sıcaklık ve saatlik yağış</small></h2>
   <div class="kart"><div class="fig" id="fig"><svg id="grafik"></svg></div>
@@ -170,6 +196,7 @@ footer a{color:inherit}
 </main>
 <footer>
   Veri: <a href="https://open-meteo.com/" rel="noopener">Open-Meteo</a> (ECMWF, DWD ICON, NOAA GFS vb. modellerin en uygun birleşimi). Sayfa her açılışta ve açık kaldıkça 10 dakikada bir güncellenir.
+  Radar: <a href="https://www.rainviewer.com/" rel="noopener">Weather data by RainViewer</a> (kişisel kullanım). Harita: © OpenStreetMap katkıcıları, © CARTO.
   Uyarılar model verisinden otomatik üretilir, resmî değildir; resmî uyarılar için <a href="https://www.mgm.gov.tr/" rel="noopener">Meteoroloji Genel Müdürlüğü</a>.
 </footer>
 
@@ -262,6 +289,7 @@ async function modelIstek(url, anahtar, adaylar, params, kontrol="temperature_2m
 async function yukle(){
   $("zaman").textContent = "Güncelleniyor…";
   kveri = null; kisYenile(); dogYenile();
+  radarKur();
   try { veriHam = await getir(); veri = veriHam; sonGuncelleme = Date.now(); duzeltUygula(); ciz(); karsilastir();
         if(duzeltAktif && KARSILASTIR.includes(model)) dogHesapla(); }
   catch(e){ $("zaman").textContent = "Veri alınamadı (" + e.message + "). İnternet bağlantını kontrol edip yenile."; }
@@ -887,6 +915,94 @@ function favCiz(){
   $("favs").innerHTML = f.map((y,k) => `<button class="fav${y.ad===yer.ad?" aktif":""}" data-k="${k}">${esc(y.ad)}</button>`).join("");
   $("favs").querySelectorAll(".fav").forEach(b => b.onclick = () => { yer = f[+b.dataset.k]; ls.set("hava_yer", yer); yukle(); });
 }
+
+/* ---------- yağış radarı (RainViewer + Leaflet) ---------- */
+const RV_URL = "https://api.rainviewer.com/public/weather-maps.json";
+const LF_JS = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.js", LF_CSS = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css";
+const radar = {gorunur:false, harita:null, isaret:null, kareler:[], katman:{}, i:0, oynuyor:null, host:"", son:0, merkez:"", lfSoz:null}; window.hRadar = radar;
+function leafletYukle(){
+  if(window.L) return Promise.resolve();
+  if(radar.lfSoz) return radar.lfSoz;
+  radar.lfSoz = new Promise((tamam, hata) => {
+    const c = document.createElement("link"); c.rel = "stylesheet"; c.href = LF_CSS;
+    c.integrity = "sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="; c.crossOrigin = "";
+    document.head.appendChild(c);
+    const j = document.createElement("script"); j.src = LF_JS;
+    j.integrity = "sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="; j.crossOrigin = "";
+    j.onload = () => tamam(); j.onerror = () => { radar.lfSoz = null; hata(new Error("harita kütüphanesi yüklenemedi")); };
+    document.head.appendChild(j);
+  });
+  return radar.lfSoz;
+}
+function radarSaat(t){ const d = new Date(t*1000); return d.toLocaleTimeString("tr-TR", {hour:"2-digit", minute:"2-digit"}); }
+async function radarKur(){
+  if(!radar.gorunur) return;
+  try{
+    await leafletYukle();
+    if(!radar.harita){
+      $("radar").innerHTML = "";
+      radar.harita = L.map("radar", {zoomControl:true, minZoom:4, maxZoom:10, attributionControl:true}).setView([yer.lat, yer.lon], 7);
+      radar.harita.attributionControl.setPrefix(false);
+      L.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png", {subdomains:"abcd", maxZoom:10,
+        attribution:'© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> © <a href="https://carto.com/attributions">CARTO</a>'}).addTo(radar.harita);
+      radar.merkez = yer.lat + "," + yer.lon;
+    }
+    const m = yer.lat + "," + yer.lon;
+    if(m !== radar.merkez){ radar.harita.setView([yer.lat, yer.lon], Math.max(radar.harita.getZoom(), 6)); radar.merkez = m; }
+    if(radar.isaret) radar.isaret.remove();
+    radar.isaret = L.circleMarker([yer.lat, yer.lon], {radius:7, color:"#fff", weight:3, fillColor:"#e8590c", fillOpacity:1}).addTo(radar.harita).bindTooltip(yer.ad);
+    radar.harita.invalidateSize();
+    if(Date.now() - radar.son > 5*60*1000) await radarKareler();
+  }catch(e){
+    $("rdurum").textContent = "Radar yüklenemedi (" + e.message + "). Aşağıdaki MGM bağlantılarını kullanabilirsin.";
+  }
+}
+async function radarKareler(){
+  const r = await fetch(RV_URL, {cache:"no-store"});
+  if(!r.ok) throw new Error("RainViewer HTTP " + r.status);
+  const j = await r.json(), past = (j.radar && j.radar.past) || [];
+  if(!past.length) throw new Error("radar karesi yok");
+  radarDur();
+  Object.values(radar.katman).forEach(k => radar.harita.removeLayer(k)); radar.katman = {};
+  radar.host = j.host || "https://tilecache.rainviewer.com"; radar.kareler = past; radar.son = Date.now();
+  const k = $("rkaydir"); k.max = past.length - 1; k.disabled = false; $("roynat").disabled = false;
+  radarGoster(past.length - 1);
+  // komşu kareleri arka planda hazırla ki animasyon akıcı olsun
+  past.forEach((_, i) => radarKatman(i));
+}
+function radarKatman(i){
+  const f = radar.kareler[i]; if(!f) return null;
+  if(!radar.katman[f.path]){
+    // Ücretsiz API: en fazla zoom 7, yalnız renk şeması 2 (Universal Blue). Daha yakın zoomda karo büyütülür.
+    radar.katman[f.path] = L.tileLayer(radar.host + f.path + "/256/{z}/{x}/{y}/2/1_1.png", {
+      opacity:0, zIndex:5, maxNativeZoom:7, maxZoom:10, tileSize:256,
+      attribution:'<a href="https://www.rainviewer.com/" target="_blank" rel="noopener">Weather data by RainViewer</a>'}).addTo(radar.harita);
+  }
+  return radar.katman[f.path];
+}
+function radarGoster(i){
+  const n = radar.kareler.length; if(!n) return;
+  i = (i + n) % n;
+  const onceki = radar.kareler[radar.i], yeni = radar.kareler[i];
+  const ky = radarKatman(i); if(ky) ky.setOpacity(0.75);
+  if(onceki && onceki !== yeni && radar.katman[onceki.path]) radar.katman[onceki.path].setOpacity(0);
+  radar.i = i; $("rkaydir").value = i;
+  const dk = Math.round((Date.now()/1000 - yeni.time) / 60);
+  $("rzaman").innerHTML = `${radarSaat(yeni.time)}<small>${i === n-1 ? "en son · " : ""}${dk <= 0 ? "şimdi" : dk + " dk önce"}</small>`;
+}
+function radarDur(){ if(radar.oynuyor){ clearTimeout(radar.oynuyor); radar.oynuyor = null; } $("roynat").textContent = "▶"; $("roynat").setAttribute("aria-label","Oynat"); }
+function radarOynat(){
+  const adim = () => {
+    const son = radar.i === radar.kareler.length - 1;
+    radarGoster(radar.i + 1);
+    radar.oynuyor = setTimeout(adim, radar.i === radar.kareler.length - 1 ? 1500 : (son ? 700 : 500));
+  };
+  $("roynat").textContent = "❚❚"; $("roynat").setAttribute("aria-label","Durdur");
+  adim();
+}
+$("roynat").onclick = () => radar.oynuyor ? radarDur() : radarOynat();
+$("rkaydir").oninput = e => { radarDur(); radarGoster(+e.target.value); };
+new IntersectionObserver(e => { radar.gorunur = e[0].isIntersecting || radar.gorunur; if(e[0].isIntersecting) radarKur(); }, {rootMargin:"200px"}).observe($("radar"));
 
 /* ---------- başlangıç ve otomatik yenileme ---------- */
 (async () => {
