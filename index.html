@@ -147,6 +147,15 @@ footer a{color:inherit}
 .gozlem .ham{font-family:ui-monospace,Consolas,monospace;font-size:12px;color:var(--soluk);margin-top:8px;word-break:break-all}
 .gozlem .ist{cursor:pointer}.gozlem .ist.aktif{background:var(--gok);border-color:var(--gok);color:#fff}
 .gozlem .eski{color:var(--turuncu);font-weight:600}
+.mgmfil{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px}
+.mgmfil input,.mgmfil select{font:inherit;font-size:14px;padding:7px 10px;border-radius:10px;border:1px solid var(--cizgi);background:var(--kart);color:var(--ink)}
+.mgmfil input[type=search]{flex:1;min-width:140px}
+.mgmfil label{font-size:14px;display:flex;gap:6px;align-items:center}
+#mgmtab tbody tr{cursor:pointer}#mgmtab tbody tr:hover{background:light-dark(#f1f5fa,#13202f)}
+#mgmtab tr.secili{background:light-dark(#e6f0fb,#14273d)}
+#mgmtab td.ts{font-weight:800;font-variant-numeric:tabular-nums}
+#mgmtab td.eski{color:var(--turuncu)}
+.mgmkay{font-size:13px;color:var(--soluk);margin-top:8px}
 </style>
 </head>
 <body>
@@ -171,6 +180,18 @@ footer a{color:inherit}
 
   <h2>Gerçek gözlem <small>en yakın havalimanı istasyonu · METAR</small></h2>
   <div class="kart gozlem" id="gozlem"><div class="durumyok">Gözlem yükleniyor…</div></div>
+
+  <h2 id="mgmbaslik">Türkiye geneli <small>il merkezlerinde son ölçüm · MGM</small></h2>
+  <div class="kart">
+    <div class="mgmfil">
+      <input type="search" id="mgmara" placeholder="İl ara…" aria-label="İl ara">
+      <select id="mgmbolge" aria-label="Bölge"><option value="">Tüm bölgeler</option></select>
+      <select id="mgmsira" aria-label="Sıralama"><option value="il">İl adı</option><option value="sicak">En sıcak</option><option value="soguk">En soğuk</option><option value="yakin">Bana en yakın</option></select>
+      <label><input type="checkbox" id="mgmfav"> Sadece favoriler</label>
+    </div>
+    <div class="scroll"><table id="mgmtab"><thead><tr><th>İl</th><th>Sıcaklık</th><th>Durum</th><th>Nem</th><th>Rüzgâr</th><th>Saat</th></tr></thead><tbody><tr><td colspan="6" class="durumyok">Yükleniyor…</td></tr></tbody></table></div>
+    <div class="mgmkay" id="mgmkay">Kaynak: <a href="https://www.mgm.gov.tr/" target="_blank" rel="noopener">Meteoroloji Genel Müdürlüğü</a></div>
+  </div>
 
   <h2>Yağış beklentisi <small>önümüzdeki saatler</small></h2>
   <div class="yag" id="yag"></div>
@@ -219,7 +240,7 @@ footer a{color:inherit}
 </main>
 <footer>
   Veri: <a href="https://open-meteo.com/" rel="noopener">Open-Meteo</a> (ECMWF, DWD ICON, NOAA GFS vb. modellerin en uygun birleşimi). Sayfa her açılışta ve açık kaldıkça 10 dakikada bir güncellenir.
-  Radar: <a href="https://www.rainviewer.com/" rel="noopener">Weather data by RainViewer</a> (kişisel kullanım). Harita: © OpenStreetMap katkıcıları. Anlık hava durumu ve gözlem: NOAA Aviation Weather Center (havalimanı METAR raporları).
+  Radar: <a href="https://www.rainviewer.com/" rel="noopener">Weather data by RainViewer</a> (kişisel kullanım). Harita: © OpenStreetMap katkıcıları. İstasyon ölçümleri: <a href="https://www.mgm.gov.tr/" rel="noopener">Meteoroloji Genel Müdürlüğü</a> (izinle). Havalimanı gözlemleri: NOAA Aviation Weather Center (METAR).
   Uyarılar model verisinden otomatik üretilir, resmî değildir; resmî uyarılar için <a href="https://www.mgm.gov.tr/" rel="noopener">Meteoroloji Genel Müdürlüğü</a>.
 </footer>
 
@@ -313,8 +334,8 @@ async function yukle(){
   $("zaman").textContent = "Güncelleniyor…";
   kveri = null; kisYenile(); dogYenile();
   radarKur();
-  gozlemYukle();
-  try { veriHam = await getir(); veri = veriHam; sonGuncelleme = Date.now(); duzeltUygula(); ciz(); gozlemCiz(); anlikDurumGozlem(); karsilastir();
+  gozlemYukle(); mgmYukle();
+  try { veriHam = await getir(); veri = veriHam; sonGuncelleme = Date.now(); duzeltUygula(); ciz(); gozlemCiz(); mgmTablo(); anlikDurumGozlem(); karsilastir();
         if(duzeltAktif && KARSILASTIR.includes(model)) dogHesapla(); }
   catch(e){ $("zaman").textContent = "Veri alınamadı (" + e.message + "). İnternet bağlantını kontrol edip yenile."; }
 }
@@ -382,7 +403,7 @@ function ciz(){
   const z = new Date(sonGuncelleme);
   $("mnot").textContent = (model==="auto" ? "Open-Meteo bölgeye göre en iyi modelleri birleştirir" : `Tahmin: ${d._modelId}${d._yedek?" (saatlik veri otomatik)":""} · anlık değerler: otomatik`) + duzeltNotu();
   $("tablo-baslik").innerHTML = `10 günlük tahmin <small>${esc(MODELLER[model].ad)}${d._duzeltme ? " · yerel düzeltmeli" : ""}</small>`;
-  $("zaman").innerHTML = `<span>Model hesabı (ölçüm değil): ${c.time.slice(11,16)}</span><span>Sayfa güncellendi: ${z.toLocaleTimeString("tr-TR",{hour:"2-digit",minute:"2-digit"})}</span>`;
+  $("zaman").innerHTML = `<span id="modelzaman">Model hesabı (ölçüm değil): ${c.time.slice(11,16)}</span><span>Sayfa güncellendi: ${z.toLocaleTimeString("tr-TR",{hour:"2-digit",minute:"2-digit"})}</span>`;
 
   $("uyarilar").innerHTML = u.map(([r,b,a]) => `<div class="uyari ${r}" role="alert"><i style="background:var(--${r})"></i><div><b>${esc(b)}</b><span>${esc(a)}</span></div></div>`).join("");
 
@@ -940,6 +961,69 @@ function favCiz(){
   $("favs").querySelectorAll(".fav").forEach(b => b.onclick = () => { yer = f[+b.dataset.k]; ls.set("hava_yer", yer); yukle(); });
 }
 
+/* ---------- MGM il merkezleri (mgm.json, MGM izniyle; kaynak gösterimi zorunlu) ---------- */
+const MGM_KOD = {A:0, AB:1, PB:2, CB:3, HY:61, Y:63, KY:65, KKY:71, HKY:71, K:73, YKY:75, HSY:80, SY:81, KSY:82, MSY:80,
+  DY:96, GSY:95, KGY:99, SIS:45, PUS:45, DMN:45, KF:45};
+const MGM_KM = 30, MGM_DK = 90;
+let mgmVeri = null;
+const ondalik = t => t == null ? "–" : t.toLocaleString("tr-TR",{minimumFractionDigits:1, maximumFractionDigits:1});
+async function mgmYukle(){
+  try{
+    const r = await fetch("mgm.json?t=" + Math.floor(Date.now()/60000), {cache:"no-store"});
+    if(!r.ok) throw new Error(r.status === 404 ? "yok" : "HTTP " + r.status);
+    mgmVeri = await r.json();
+  }catch(e){
+    if(!mgmVeri){
+      $("mgmtab").tBodies[0].innerHTML = `<tr><td colspan="6" class="durumyok">${e.message === "yok"
+        ? "MGM verisi henüz yok. GitHub'da <b>Actions → MGM son durum → Run workflow</b> ile bir kez çalıştır."
+        : "MGM verisi alınamadı (" + esc(e.message) + ")."}</td></tr>`;
+      return;
+    }
+  }
+  if(!$("mgmbolge").dataset.dolu){
+    [...new Set(mgmVeri.iller.map(x => x.bolge).filter(Boolean))].forEach(b => $("mgmbolge").add(new Option(b, b)));
+    $("mgmbolge").dataset.dolu = 1;
+  }
+  mgmTablo(); anlikDurumGozlem();
+}
+function sicRenk(t){
+  if(t == null) return "";
+  return t <= -10 ? "#5b6ee1" : t <= 0 ? "#3d8bdb" : t <= 10 ? "#2a9d8f" : t <= 20 ? "#7aa63a" : t <= 30 ? "#e0a100" : "#e8590c";
+}
+function mgmTablo(){
+  if(!mgmVeri) return;
+  const q = mgmAnahtar($("mgmara").value), b = $("mgmbolge").value, sira = $("mgmsira").value, sadeceFav = $("mgmfav").checked;
+  const favlar = new Set(ls.get("hava_fav", []).map(f => mgmAnahtar(f.ad)));
+  const now = Date.now()/1000;
+  let L = mgmVeri.iller.map(x => ({...x, km: x.lat!=null ? mesafe(yer.lat, yer.lon, x.lat, x.lon) : 1e9}))
+    .filter(x => (!q || mgmAnahtar(x.il).includes(q)) && (!b || x.bolge === b) && (!sadeceFav || favlar.has(mgmAnahtar(x.il))));
+  const tr = (a, c) => a.il.localeCompare(c.il, "tr");
+  L.sort(sira === "sicak" ? (a,c) => (c.t ?? -99) - (a.t ?? -99) : sira === "soguk" ? (a,c) => (a.t ?? 99) - (c.t ?? 99) : sira === "yakin" ? (a,c) => a.km - c.km : tr);
+  const yakin = mgmEnYakin();
+  $("mgmtab").tBodies[0].innerHTML = L.length ? L.map(x => {
+    const dk = Math.round((now - x.zaman)/60), saat = new Date(x.zaman*1000).toLocaleTimeString("tr-TR",{hour:"2-digit",minute:"2-digit"});
+    const ruz = x.hiz == null ? "–" : `${x.yon!=null ? YON[Math.round(x.yon/45)%8] + " " : ""}${Math.round(x.hiz)} km/sa`;
+    return `<tr data-il="${esc(x.il)}" class="${yakin && yakin.il === x.il ? "secili" : ""}"><td>${esc(x.il)}</td>
+      <td class="ts" style="color:${sicRenk(x.t)}">${x.t == null ? "–" : ondalik(x.t) + "°"}</td><td>${esc(x.durum || "–")}</td>
+      <td>${x.nem == null ? "–" : "%" + Math.round(x.nem)}</td><td>${ruz}</td><td class="${dk > MGM_DK ? "eski" : ""}" title="${dk} dk önce">${saat}</td></tr>`;
+  }).join("") : '<tr><td colspan="6" class="durumyok">Filtreye uyan il yok.</td></tr>';
+  $("mgmtab").tBodies[0].querySelectorAll("tr[data-il]").forEach(r => r.onclick = () => {
+    const x = mgmVeri.iller.find(i => i.il === r.dataset.il); if(!x) return;
+    if(x.lat != null) sec({name:x.il, admin1:x.il, country:"Türkiye", latitude:x.lat, longitude:x.lon});
+    window.scrollTo({top:0, behavior:"smooth"});
+  });
+  const g = new Date(mgmVeri.guncel*1000).toLocaleTimeString("tr-TR",{hour:"2-digit",minute:"2-digit"});
+  $("mgmkay").innerHTML = `Kaynak: <a href="https://www.mgm.gov.tr/" target="_blank" rel="noopener">Meteoroloji Genel Müdürlüğü</a> · ${mgmVeri.iller.length} il · veri alındı ${g} · bir satıra basınca o il seçilir`;
+}
+function mgmAnahtar(a){ return (a||"").toLocaleLowerCase("tr-TR").replace(/ç/g,"c").replace(/ğ/g,"g").replace(/ı/g,"i").replace(/ö/g,"o").replace(/ş/g,"s").replace(/ü/g,"u").replace(/[^a-z0-9]/g,""); }
+function mgmEnYakin(){
+  if(!mgmVeri) return null;
+  const now = Date.now()/1000;
+  return mgmVeri.iller.filter(x => x.lat != null && now - x.zaman < MGM_DK*60 && x.durum)
+    .map(x => ({...x, km: mesafe(yer.lat, yer.lon, x.lat, x.lon)})).filter(x => x.km <= MGM_KM).sort((a,c) => a.km - c.km)[0] || null;
+}
+["mgmara","mgmbolge","mgmsira","mgmfav"].forEach(id => $(id).addEventListener(id === "mgmara" ? "input" : "change", mgmTablo));
+
 /* ---------- gerçek gözlem (METAR, gozlem.json) ---------- */
 const BULUT_AD = {FEW:"Az bulutlu", SCT:"Parçalı bulutlu", BKN:"Çok bulutlu", OVC:"Kapalı", VV:"Gökyüzü görünmüyor"};
 const BULUT_SIRA = {FEW:1, SCT:2, BKN:3, OVC:4, VV:5};
@@ -1052,8 +1136,27 @@ function metarDurum(s){
   return gk.ad.replace(" (CAVOK)","") + (pus ? ", puslu" : "");
 }
 function anlikDurumGozlem(){
-  if(!gozlemVeri || !veri || !$("dkay")) return;
+  if(!veri || !$("dkay")) return;
   const now = Date.now()/1000;
+  const m = mgmEnYakin();
+  if(m){
+    const kutu = $("anlik").querySelector(".sicak");
+    kutu.querySelector(".durum").textContent = m.durum;
+    if(m.t != null){ kutu.querySelector(".derece").textContent = Math.round(m.t) + "°"; document.title = `${Math.round(m.t)}° ${yer.ad} — Hava Durumu`; }
+    const olc = $("anlik").querySelectorAll(".olc");
+    if(olc.length >= 3){
+      if(m.basinc != null) olc[0].innerHTML = `<span>Basınç</span><b>${Math.round(m.basinc)} hPa</b><span>MGM ölçümü</span>`;
+      if(m.hiz != null) olc[1].innerHTML = `<span>Rüzgâr</span><b>${m.yon != null ? `<span class="ok" style="transform:rotate(${m.yon+180}deg)">↑</span> ` : ""}${Math.round(m.hiz)} km/sa</b><span>${m.yon != null ? YON[Math.round(m.yon/45)%8] + " · " : ""}MGM ölçümü</span>`;
+      if(m.nem != null) olc[2].innerHTML = `<span>Nem</span><b>%${Math.round(m.nem)}</b><span>Bulut %${yuv(veri.current.cloud_cover)} (model)</span>`;
+    }
+    const mz = $("modelzaman");
+    if(mz) mz.textContent = `Sıcaklık, durum, basınç, rüzgâr, nem: MGM ${m.il} istasyonu (${new Date(m.zaman*1000).toLocaleTimeString("tr-TR",{hour:"2-digit",minute:"2-digit"})}) · diğerleri ve tahminler: model`;
+    const kod = MGM_KOD[m.kod];
+    if(kod != null){ const sv = kutu.querySelector(":scope > svg"); if(sv) sv.outerHTML = ikon(kod, veri.current.is_day); }
+    $("dkay").innerHTML = `MGM ${esc(m.il)} ölçümü${m.t != null ? " (" + ondalik(m.t) + "°)" : ""} · ${Math.round((now - m.zaman)/60)} dk önce · model ${yuv(veri.current.temperature_2m)}° · Kaynak: <a href="https://www.mgm.gov.tr/" target="_blank" rel="noopener" style="color:inherit">Meteoroloji Genel Müdürlüğü</a>`;
+    return;
+  }
+  if(!gozlemVeri) return;
   const s = gozlemVeri.istasyonlar.filter(x => now - x.zaman < DURUM_DK*60 && x.kaynak !== "mgm")
     .map(x => ({...x, km: mesafe(yer.lat, yer.lon, x.lat, x.lon)})).filter(x => x.km <= DURUM_KM).sort((a,b) => a.km - b.km)[0];
   if(!s) return;
