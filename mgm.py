@@ -65,23 +65,38 @@ class Reddedildi(Exception):
     pass
 
 
+class Erisilemiyor(Exception):
+    pass
+
+
+ARDISIK_HATA = 0
+
+
 def getir(ses, yol, params):
-    for deneme in range(3):
+    """Tek istek. Bağlantı/zaman aşımı üst üste 4 kez olursa Erisilemiyor fırlatır (gereksiz yere beklememek için)."""
+    global ARDISIK_HATA
+    for deneme in range(2):
         try:
-            r = ses.get(f"{SERVIS}/{yol}", params=params, timeout=25)
+            r = ses.get(f"{SERVIS}/{yol}", params=params, timeout=(6, 12))
         except requests.RequestException as e:
-            if deneme == 2:
-                raise
-            time.sleep(3 * (deneme + 1)); continue
+            ARDISIK_HATA += 1
+            print(f"  bağlantı hatası ({yol}): {type(e).__name__}", flush=True)
+            if ARDISIK_HATA >= 4:
+                raise Erisilemiyor(f"{type(e).__name__}: {e}")
+            time.sleep(2); continue
+        ARDISIK_HATA = 0
         if r.status_code in (401, 403):
             raise Reddedildi(f"HTTP {r.status_code}: {r.text[:200]}")
         if r.status_code == 429 or r.status_code >= 500:
+            print(f"  HTTP {r.status_code} ({yol}), tekrar denenecek", flush=True)
             time.sleep(5 * (deneme + 1)); continue
         if r.status_code != 200:
+            print(f"  HTTP {r.status_code} ({yol}): {r.text[:120]}", flush=True)
             return None
         try:
             return r.json()
         except ValueError:
+            print(f"  JSON değil ({yol}): {r.text[:120]}", flush=True)
             return None
     return None
 
@@ -100,6 +115,7 @@ def il_merkezi(ses, il):
 
 def main():
     ses = requests.Session(); ses.headers.update(BASLIK)
+    print("MGM servisine bağlanılıyor…", flush=True)
     sonuc, eksik = [], []
     try:
         for bolge, iller in ILLER.items():
@@ -107,6 +123,7 @@ def main():
                 m = il_merkezi(ses, il)
                 mid = al(m, "merkezId", "merkezid") if m else None
                 if not mid:
+                    print(f"{il}: merkez bulunamadı", flush=True)
                     eksik.append(il); continue
                 d = getir(ses, "sondurumlar", {"merkezid": mid})
                 d = d[0] if isinstance(d, list) and d else d
@@ -125,7 +142,12 @@ def main():
                     "basinc": sayi(al(d, "denizeIndirgenmisBasinc")), "yagis": sayi(al(d, "yagis00Now")),
                     "kod": kod, "durum": HADISE.get(kod, kod),
                 })
+                print(f"{il}: {sonuc[-1]['t']}° {sonuc[-1]['durum']}", flush=True)
                 time.sleep(0.4)  # nazik ol: ~80 il, 2 istek/il
+    except Erisilemiyor as e:
+        print("MGM servisine bağlanılamadı (art arda zaman aşımı):", e)
+        print("Büyük ihtimalle servis GitHub'ın yurt dışı sunucularından gelen isteklere cevap vermiyor. Eski mgm.json korunuyor.")
+        return 1
     except Reddedildi as e:
         print("MGM servisi isteği reddetti:", e)
         print("İzin verilen erişim şeklini (gerekli başlık, IP veya anahtar) MGM'ye sorun. Eski mgm.json korunuyor.")
