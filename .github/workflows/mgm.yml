@@ -15,7 +15,7 @@ concurrency:
 jobs:
   al:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 6
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -26,7 +26,7 @@ jobs:
           SITE_URL: ${{ vars.SITE_URL }}
         run: |
           pip install requests
-          python mgm.py
+          python -u mgm.py
       - name: Depoya kaydet
         run: |
           git config user.name "github-actions[bot]"
