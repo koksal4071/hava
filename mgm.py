@@ -84,12 +84,16 @@ def getir(ses, yol, params):
             if ARDISIK_HATA >= 4:
                 raise Erisilemiyor(f"{type(e).__name__}: {e}")
             time.sleep(2); continue
-        ARDISIK_HATA = 0
+        if r.status_code < 500 and r.status_code != 429:
+            ARDISIK_HATA = 0
         if r.status_code in (401, 403):
             raise Reddedildi(f"HTTP {r.status_code}: {r.text[:200]}")
         if r.status_code == 429 or r.status_code >= 500:
-            print(f"  HTTP {r.status_code} ({yol}), tekrar denenecek", flush=True)
-            time.sleep(5 * (deneme + 1)); continue
+            ARDISIK_HATA += 1
+            print(f"  HTTP {r.status_code} ({yol}): {r.text[:150]!r}", flush=True)
+            if ARDISIK_HATA >= 4:
+                raise Erisilemiyor(f"art arda HTTP {r.status_code}; yanıt: {r.text[:300]!r}")
+            time.sleep(3); continue
         if r.status_code != 200:
             print(f"  HTTP {r.status_code} ({yol}): {r.text[:120]}", flush=True)
             return None
@@ -145,8 +149,8 @@ def main():
                 print(f"{il}: {sonuc[-1]['t']}° {sonuc[-1]['durum']}", flush=True)
                 time.sleep(0.4)  # nazik ol: ~80 il, 2 istek/il
     except Erisilemiyor as e:
-        print("MGM servisine bağlanılamadı (art arda zaman aşımı):", e)
-        print("Büyük ihtimalle servis GitHub'ın yurt dışı sunucularından gelen isteklere cevap vermiyor. Eski mgm.json korunuyor.")
+        print("MGM servisi art arda hata verdi:", e)
+        print("Servis bu tür isteklere hizmet vermiyor. İzinli erişim şeklini MGM'ye sorun. Eski mgm.json korunuyor.")
         return 1
     except Reddedildi as e:
         print("MGM servisi isteği reddetti:", e)
